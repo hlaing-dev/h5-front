@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
-// import cardSkeleton from "../../assets/public/imgLoading.png"; // Placeholder image
+import { useEffect, useRef, useState } from "react";
+import cardSkeleton from "../../assets/blur.png"; // Placeholder image
 const LazyLoadImage = ({ src, alt, width, height, className, ...props }) => {
   const imgRef = useRef(null);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -10,7 +11,10 @@ const LazyLoadImage = ({ src, alt, width, height, className, ...props }) => {
             if (imgRef.current) {
               imgRef.current.src = src;
               imgRef.current.onload = () => {
-                imgRef.current.style.opacity = "1";
+                if (imgRef.current && imgRef.current !== null) {
+                  imgRef.current.style.opacity = "1";
+                  setLoaded(true);
+                }
               };
             }
             observer.disconnect();
@@ -32,15 +36,16 @@ const LazyLoadImage = ({ src, alt, width, height, className, ...props }) => {
     };
   }, [src]);
   return (
-    <div className={`image-container ${className}`} style={{ width, height }}>
+    <div className={`image-container2 ${className}`} style={{ width, height }}>
       <img
         ref={imgRef}
-        // src={cardSkeleton}
-        src=""
+        src={cardSkeleton}
         alt={alt}
         width={width}
         height={height}
-        className={`${className} image-placeholder`}
+        className={`${className} ${
+          loaded ? "image-loaded" : "image-placeholder"
+        }`}
         {...props}
       />
     </div>

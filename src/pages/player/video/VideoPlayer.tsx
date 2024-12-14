@@ -1,224 +1,318 @@
-// VideoPlayer.tsx
-import React, { useEffect, useRef, useState } from 'react';
-import { Player, ControlBar, BigPlayButton, ProgressControl, FullscreenToggle, CurrentTimeDisplay, DurationDisplay } from 'video-react';
-import 'video-react/dist/video-react.css';
-import Hls from 'hls.js';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faExpand } from '@fortawesome/free-solid-svg-icons';
-import floatingScreen from '../../../assets/floatingScreen.png';
-
-// [Interfaces Episode and MovieDetail remain the same]
-
-interface Episode {
-  episode_id: number | null;
-  episode_name: string;
-  play_url: string;
-  from_code: string;
-  ready_to_play: boolean;
-}
-
-interface MovieDetail {
-  name: string;
-  area: string;
-  year: string;
-  score: string;
-  content: string;
-  cover: string;
-  type_name: string;
-  tags: { name: string }[];
-  comments_count: string;
-  popularity_score: number;
-  play_from: {
-    name: string;
-    code: string;
-    list: Episode[];
-    total: number | null;
-    tips: string;
-  }[];
-}
-
-interface VideoPlayerProps {
-  videoUrl: string;
-  onBack: () => void;
-  movieDetail: MovieDetail;
-  selectedEpisode?: Episode | null;
-}
+import React, { useEffect, useRef, useState } from "react";
+import Artplayer from "artplayer";
+import Hls from "hls.js"; // Import Hls.js
+import floatingScreen from "../../../assets/floatingScreen.png";
+import axios from "axios";
+import { VideoPlayerProps } from "../../../model/videoModel";
+import { useGetRecordQuery } from "../../profile/services/profileApi";
+import { convertToSecurePayload } from "../../../services/newEncryption";
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
   videoUrl,
   onBack,
   movieDetail,
   selectedEpisode,
+  resumeTime,
+  handleVideoError,
 }) => {
-  const playerRef = useRef<Player>(null);
-  const [isReady, setIsReady] = useState(false);
-  const hlsRef = useRef<Hls | null>(null);
+  const playerRef = useRef<any>(null);
+  const videoElementRef = useRef<HTMLDivElement>(null);
+  const [videoRatio, setVideoRatio] = useState(9 / 16); // Default to 16:9 ratio
+  const { refetch } = useGetRecordQuery(); // Fetch favorite movies list from API
+  const [isControlsVisible, setIsControlsVisible] = useState(false);
+  const inactivityTimeout = useRef<number | null>(null);
+  const [reHeight, setReHeight] = useState(false);
+  // Function to get token from localStorage
+  const getToken = () => {
+    const isLoggedIn = localStorage.getItem("authToken");
+    const parsedLoggedIn = isLoggedIn ? JSON.parse(isLoggedIn) : null;
+    return parsedLoggedIn?.data?.access_token;
+  };
 
-  const STORAGE_KEY = 'watchHistory';
-  const STORAGE_KEY_V2 = 'lastWatchHistory';
+  // Function to report playback progress on specific events (back or episode change)
+  const reportProgress = async (currentTime: number, duration: number) => {
+    const token = getToken();
+    if (!token) return;
 
-  // Save the movie progress
-  const saveProgress = () => {
-    if (playerRef.current) {
-      const currentTime = playerRef.current.getState().player.currentTime;
-      const savedHistory = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-
-      if (!savedHistory[movieDetail.name]) {
-        savedHistory[movieDetail.name] = {};
-      }
-
-      savedHistory[movieDetail.name][`episode_${selectedEpisode?.episode_id}`] = {
-        progressTime: currentTime,
-      };
-
-      savedHistory[movieDetail.name]['movieDetail'] = {
-        movieDetail: movieDetail,
-      };
-
-      console.log('Saving progress:', currentTime);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(savedHistory));
-
-      const lastWatchHistoryList = JSON.parse(
-        localStorage.getItem(STORAGE_KEY_V2) || '{}'
+    try {
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/movie_play/report`,
+        convertToSecurePayload({
+          movie_id: movieDetail.id, // Assuming movie_id is movie name
+          episode_id: selectedEpisode?.episode_id,
+          movie_from: selectedEpisode?.from_code,
+          duration: Math.floor(duration), // Report in seconds
+          current_time: Math.floor(currentTime), // Report in seconds
+        }),
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
-
-      if (!lastWatchHistoryList[movieDetail.name]) {
-        lastWatchHistoryList[movieDetail.name] = {};
-      }
-
-      const latestWatchHistory = {
-        playedTime: new Date(),
-        progressTime: currentTime,
-        movieId: (movieDetail as any)['id'],
-        duration: playerRef.current.getState().player.duration,
-        image: (movieDetail as any).cover,
-        ...selectedEpisode,
-      };
-      lastWatchHistoryList[movieDetail.name] = latestWatchHistory;
-      localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(lastWatchHistoryList));
+    } catch (error) {
+      console.error("Error reporting playback progress:", error);
     }
   };
 
-  // Load saved progress if available
-  const loadProgress = () => {
-    const savedHistory = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    if (
-      savedHistory[movieDetail.name] &&
-      savedHistory[movieDetail.name][`episode_${selectedEpisode?.episode_id}`]
-    ) {
-      const savedTime =
-        savedHistory[movieDetail.name][`episode_${selectedEpisode?.episode_id}`]
-          .progressTime;
-      if (playerRef.current && savedTime) {
-        console.log('Resuming from:', savedTime);
-        playerRef.current.seek(savedTime || 0);
+  useEffect(() => {
+    let hls: Hls | null = null;
+
+    const initializePlayer = async () => {
+      if (videoElementRef.current && videoUrl) {
+        const art = new Artplayer({
+          container: videoElementRef.current,
+          url: videoUrl,
+          autoplay: true,
+          playbackRate: true,
+          setting: true,
+          fullscreen: true,
+          airplay: true,
+          // miniProgressBar: true,
+          // moreVideoAttr: {
+          //   playsInline: true,
+          // },
+        });
+
+        // Use Hls.js for HLS streams
+        if (Hls.isSupported() && videoUrl.includes(".m3u8")) {
+          hls = new Hls();
+          hls.loadSource(videoUrl);
+          hls.attachMedia(art.video);
+
+          // Handle HLS errors
+          hls.on(Hls.Events.ERROR, (_, data) => {
+            if (data.fatal) {
+              console.error("HLS error:", data);
+              handleVideoError(videoUrl);
+            }
+          });
+        } else {
+          art.video.src = videoUrl; // For Safari and iOS
+        }
+
+        // Adjust video ratio based on the video's actual dimensions
+        art.once("video:loadedmetadata", () => {
+          const videoWidth = art.video.videoWidth;
+          const videoHeight = art.video.videoHeight;
+          setVideoRatio(videoHeight / videoWidth); // Set the dynamic aspect ratio
+          setReHeight(videoWidth < videoHeight);
+        });
+
+        // Set resume time if available
+        art.once("ready", () => {
+          if (resumeTime > 0) {
+            art.currentTime = resumeTime;
+          }
+          setTimeout(() => {
+            if (playerRef.current) {
+              const token = getToken();
+              if (token) {
+                reportProgress(
+                  playerRef.current.currentTime,
+                  playerRef.current.duration
+                );
+              }
+            }
+          }, 1000);
+          setTimeout(() => {
+            if (playerRef.current) {
+              const token = getToken();
+              if (token) {
+                refetch();
+              }
+            }
+          }, 3000);
+        });
+        playerRef.current = art;
+      }
+    };
+
+    initializePlayer();
+
+    // Orientation change listener
+    const handleOrientationChange = () => {
+      if (playerRef && playerRef.current) {
+        playerRef.current.fullscreen =
+          window.innerWidth > window.innerHeight ? true : false;
+      }
+    };
+
+    // Add the event listener for orientation change
+    window.addEventListener("orientationchange", handleOrientationChange);
+    return () => {
+      // Clean up HLS and ArtPlayer
+      if (hls) {
+        hls.destroy(); // Stop HLS requests
+        hls = null;
+      }
+      if (playerRef.current) {
+        playerRef.current.pause();
+        playerRef.current.video.src = ""; // Clear video source
+        playerRef.current.destroy(); // Destroy ArtPlayer
+        playerRef.current = null;
+      }
+    };
+  }, [videoUrl, resumeTime]);
+
+  const handleBack = async () => {
+    if (playerRef.current) {
+      // Report progress before navigating back
+      reportProgress(playerRef.current.currentTime, playerRef.current.duration);
+      playerRef.current.pause();
+      playerRef.current.video.src = ""; // Stop video requests
+      playerRef.current.destroy();
+      playerRef.current = null;
+      const token = getToken();
+      if (token) {
+        refetch();
       }
     }
-  };
-
-  // Handle back button click
-  const handleBack = () => {
-    saveProgress();
     onBack();
   };
 
-  // Handle Picture-in-Picture
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (playerRef.current) {
+        const token = getToken();
+        if (token) {
+          reportProgress(
+            playerRef.current.currentTime,
+            playerRef.current.duration
+          );
+          refetch();
+        }
+      }
+    }, 15000); // 15 seconds interval
+
+    return () => clearInterval(interval); // Cleanup interval on unmount
+  }, []);
+
   const handlePiP = () => {
-    if (playerRef.current) {
-      const videoElement = playerRef.current.video.video;
-      if (
-        document.pictureInPictureEnabled &&
-        videoElement.requestPictureInPicture
-      ) {
-        videoElement.requestPictureInPicture().catch((error: any) => {
-          console.error('PiP request failed:', error);
-        });
+    if (document.pictureInPictureEnabled && playerRef.current) {
+      if (playerRef.current.video !== document.pictureInPictureElement) {
+        playerRef.current.video.requestPictureInPicture();
       } else {
-        console.error('Picture-in-Picture is not supported on this device.');
+        document.exitPictureInPicture();
       }
     }
   };
 
-  // Handle fullscreen
-  const handleFullscreenToggle = () => {
-    if (playerRef.current) {
-      playerRef.current.toggleFullscreen();
+  const handleUserActivity = () => {
+    // Show the controls when there's activity
+    setIsControlsVisible(true);
+
+    // Clear any existing timeout
+    if (inactivityTimeout.current) {
+      clearTimeout(inactivityTimeout.current);
+    }
+
+    // Set a timeout to hide controls after 3 seconds of inactivity
+    inactivityTimeout.current = window.setTimeout(() => {
+      setIsControlsVisible(false);
+    }, 3000);
+  };
+
+  const handleTouchMove = () => {
+    // Immediately hide the controls during a touch slide
+    setIsControlsVisible(false);
+
+    // Optionally, clear any existing timeout to avoid re-showing the controls prematurely
+    if (inactivityTimeout.current) {
+      clearTimeout(inactivityTimeout.current);
     }
   };
 
   useEffect(() => {
-    const videoElement = playerRef.current?.video?.video;
-
-    if (videoElement) {
-      if (Hls.isSupported()) {
-        if (hlsRef.current) {
-          hlsRef.current.destroy();
-        }
-
-        const hls = new Hls();
-        hls.loadSource(videoUrl);
-        hls.attachMedia(videoElement);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          videoElement.play();
-          setIsReady(true);
-        });
-
-        hlsRef.current = hls;
-      } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-        videoElement.src = videoUrl;
-        videoElement.addEventListener('loadedmetadata', () => {
-          videoElement.play();
-          setIsReady(true);
-        });
-      } else {
-        console.error('This browser does not support HLS.');
-      }
+    // Attach event listeners for user activity
+    const player = document.getElementById("my-player");
+    if (player) {
+      player.addEventListener("touchmove", handleTouchMove);
+      player.addEventListener("mousemove", handleUserActivity);
+      player.addEventListener("keydown", handleUserActivity);
+      player.addEventListener("touchstart", handleUserActivity);
+      player.addEventListener("touchmove", handleTouchMove);
     }
 
-    // Save progress on unmount
+    // Cleanup event listeners on unmount
     return () => {
-      saveProgress();
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
+      if (inactivityTimeout.current) {
+        clearTimeout(inactivityTimeout.current);
+      }
+      if (player) {
+        player.removeEventListener("mousemove", handleUserActivity);
+        player.removeEventListener("keydown", handleUserActivity);
+        player.removeEventListener("touchstart", handleUserActivity);
+        player.addEventListener("touchmove", handleTouchMove);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoUrl]);
+  }, []);
 
-  useEffect(() => {
-    // Load progress when player is ready
-    if (isReady) {
-      loadProgress();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isReady]);
+  // useEffect(() => {
+  //   const handleScroll = () => {
+  //     const playerElement = videoElementRef.current;
+  //     if (!playerElement) return;
+
+  //     const rect = playerElement.getBoundingClientRect();
+  //     console.log('rect top is=>', rect);
+  //     // const isOutOfView = rect.top < 0;
+
+  //     // Minimize player when scrolled out of view
+  //     // setIsMinimized(isOutOfView);
+  //   };
+
+  //   window.addEventListener("scroll", handleScroll);
+  //   return () => {
+  //     window.removeEventListener("scroll", handleScroll);
+  //   };
+  // }, []);
 
   return (
-    <div className="relative bg-black h-full w-full">
+    <div
+      id="my-player"
+      className={`relative w-full bg-black ${reHeight ? "h-[40vh]" : ""}`}
+    >
       {/* Back button */}
-      <div className="absolute top-0 left-0 p-4 z-10">
-        <button onClick={handleBack} className="text-white">
-          <FontAwesomeIcon icon={faArrowLeft} size="1x" />
-        </button>
-      </div>
+      {isControlsVisible && (
+        <>
+          <div className="absolute top-0 left-0 p-4 z-50">
+            <button onClick={handleBack} className="text-white flex">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <path
+                  d="M7.828 11H20V13H7.828L13.192 18.364L11.778 19.778L4 12L11.778 4.22198L13.192 5.63598L7.828 11Z"
+                  fill="white"
+                />
+              </svg>
+              {selectedEpisode?.episode_name}
+            </button>
+          </div>
+          <div className="absolute top-0 right-0 p-4 z-50">
+            <button className="text-white" onClick={handlePiP}>
+              <img src={floatingScreen} alt="PiP" className="h-5 w-5" />
+            </button>
+          </div>
+        </>
+      )}
 
-      {/* Picture-in-Picture button */}
-      <div className="absolute top-0 right-0 p-4 z-10">
-        <button className="text-white" onClick={handlePiP}>
-          <img src={floatingScreen} alt="PiP" className="h-5 w-5" />
-        </button>
+      {/* Video element wrapper */}
+      <div
+        className={`relative w-full ${reHeight ? "h-[40vh]" : ""}`}
+        style={{ paddingTop: `${videoRatio * 100}%` }}
+      >
+        {/* Video element */}
+        <div
+          ref={videoElementRef}
+          className={`absolute top-0 left-0 w-full ${
+            reHeight ? "h-[40vh]" : "h-full"
+          }`}
+        ></div>
       </div>
-
-      {/* The video player */}
-      <Player ref={playerRef} autoPlay playsInline>
-        <BigPlayButton position="center" />
-        <ControlBar autoHide={true} disableDefaultControls={true}>
-          <CurrentTimeDisplay />
-          <ProgressControl />
-          <DurationDisplay />
-          <FullscreenToggle />
-        </ControlBar>
-      </Player>
     </div>
   );
 };

@@ -1,9 +1,10 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { convertToSecureUrl } from "../../../services/newEncryption";
 
 export const explorerAPi = createApi({
   reducerPath: "explorerAPi",
   baseQuery: fetchBaseQuery({
-    baseUrl: "https://cc3e497d.qdhgtch.com:2345/api/v1",
+    baseUrl: process.env.REACT_APP_API_URL,
     prepareHeaders: (headers) => {
       const settings = JSON.parse(
         localStorage.getItem("movieAppSettings") || "{}"
@@ -19,29 +20,29 @@ export const explorerAPi = createApi({
   }),
 
   endpoints: (builder) => ({
-    getExploreList: builder.query<any, void>({
-      query: () => {
-        return `/movie/explore/list`;
+    getExploreList: builder.query<any, any>({
+      query: ({ id, sort, classData, area, year }) => {
+        return convertToSecureUrl(`/movie/screen/list?type_id=${id}&&sort=${sort}&&class=${classData}&&area=${area}&&year=${year}`);
       },
     }),
     getMovieTopicList: builder.query<any, void>({
       query: () => {
-        return `/movie/topic`;
+        return convertToSecureUrl(`/movie/topic`);
       },
     }),
     getMovieRankingList: builder.query<any, void>({
       query: () => {
-        return `/movie/ranking/list`;
+        return convertToSecureUrl(`/movie/ranking/list`);
       },
     }),
     getMovieRankingById: builder.query<any, void>({
       query: (id) => {
-        return `/movie/ranking/list?id=${id}`;
+        return convertToSecureUrl(`/movie/ranking/list?id=${id}`);
       },
     }),
     getWeeklyMovies: builder.query({
       query: (week: any) => {
-        return `/movie/weekly?week_day=${week}`;
+        return convertToSecureUrl(`/movie/weekly?week_day=${week}`);
       },
     }),
   }),

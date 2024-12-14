@@ -1,10 +1,24 @@
-import { Link } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { Link, useNavigate } from "react-router-dom";
+import { setAuthModel } from "../../../features/login/ModelSlice";
 
 const ProfileSecond = () => {
+  const isLoggedIn = localStorage.getItem("authToken");
+  const parsedLoggedIn = isLoggedIn ? JSON.parse(isLoggedIn) : null;
+  const token = parsedLoggedIn?.data?.access_token;
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const handleLoginClick = () => {
+    if (!token) {
+      dispatch(setAuthModel(true)); // Open the login modal if not logged in
+    } else {
+      navigate("/share");
+    }
+  };
   return (
     <div className="profile-div">
       <div className="profile-div-main w-full">
-        <Link to={"/"} className="p-first">
+        <div onClick={handleLoginClick} className="p-first">
           <div className="flex gap-3 items-center">
             <div>
               <svg
@@ -21,7 +35,7 @@ const ProfileSecond = () => {
                 />
               </svg>
             </div>
-            <div className="profile-text">Share</div>
+            <div className="profile-text">我要分享</div>
           </div>
           <div>
             <svg
@@ -39,8 +53,12 @@ const ProfileSecond = () => {
               </g>
             </svg>
           </div>
-        </Link>
-        <Link to={"/"} className="p-first">
+        </div>
+        <Link
+          to={"https://cc3e497d.qdhgtch.com:1333/help"}
+          target="_blank"
+          className="p-first"
+        >
           <div className="flex gap-3 items-center">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -55,7 +73,7 @@ const ProfileSecond = () => {
                 fill-opacity="0.6"
               />
             </svg>
-            <div className="profile-text">Customer Service</div>
+            <div className="profile-text">帮助中心</div>
           </div>
           <div>
             <svg
@@ -74,7 +92,7 @@ const ProfileSecond = () => {
             </svg>
           </div>
         </Link>
-        <Link to={"/"} className="p-first">
+        <Link to={"/contact"} className="p-first">
           <div className="flex gap-3 items-center">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -89,7 +107,7 @@ const ProfileSecond = () => {
                 fill-opacity="0.6"
               />
             </svg>
-            <div className="profile-text">Contact us</div>
+            <div className="profile-text">联系我们</div>
           </div>
           <div>
             <svg

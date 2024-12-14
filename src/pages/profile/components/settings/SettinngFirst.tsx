@@ -1,11 +1,20 @@
 import { useState, useEffect } from "react";
 
 const SettingFirst = () => {
-  const [filterToggle, setFilterToggle] = useState(false); // Teen Mode
-  const [pipMode, setPipMode] = useState(false); // Picture-in-Picture Mode
-  const [vibrantMode, setVibrantMode] = useState(false); // Vibrant Mode
+  // Retrieve initial settings from localStorage or set defaults
+  const initialSettings = JSON.parse(
+    localStorage.getItem("movieAppSettings") || "{}"
+  );
 
-  // Save the settings to localStorage
+  const [filterToggle, setFilterToggle] = useState(
+    initialSettings.filterToggle || false
+  ); // Teen Mode
+  const [pipMode, setPipMode] = useState(initialSettings.pipMode || false); // Picture-in-Picture Mode
+  const [vibrantMode, setVibrantMode] = useState(
+    initialSettings.vibrantMode || false
+  ); // Vibrant Mode
+
+  // Save the settings to localStorage whenever they change
   useEffect(() => {
     const settings = {
       filterToggle,
@@ -15,22 +24,26 @@ const SettingFirst = () => {
     localStorage.setItem("movieAppSettings", JSON.stringify(settings));
   }, [filterToggle, pipMode, vibrantMode]);
 
+  const handleFilter = () => {
+    setFilterToggle((prev: any) => !prev);
+    localStorage.removeItem("headerTopics");
+  };
+
   return (
     <div className="profile-div">
       <div className="profile-div-main w-full">
+        {/* Teen Mode */}
         <div className="p-first">
           <div className="flex gap-1 max-w-[230px] flex-col ">
-            <h1>Teen Mode</h1>
-            <p className="settings-text">
-              R18 content will not be displayed once this setting is activated
-            </p>
+            <h1>青少年模式</h1>
+            <p className="settings-text">开启后不再展示R18内容 </p>
           </div>
           <div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 checked={filterToggle}
-                onChange={() => setFilterToggle((prev) => !prev)}
+                onChange={handleFilter}
                 className="sr-only peer"
               />
               <div
@@ -47,17 +60,15 @@ const SettingFirst = () => {
         {/* Picture-in-Picture Mode */}
         <div className="p-first">
           <div className="flex gap-1 max-w-[230px] flex-col ">
-            <h1>Picture-In-picture mode</h1>
-            <p className="settings-text">
-              Automatically start picture-in-picture mode when leaving the app.
-            </p>
+            <h1>自动画中画</h1>
+            <p className="settings-text">开启后打开自动画中画模式</p>
           </div>
           <div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 checked={pipMode}
-                onChange={() => setPipMode((prev) => !prev)}
+                onChange={() => setPipMode((prev: any) => !prev)}
                 className="sr-only peer"
               />
               <div
@@ -74,17 +85,15 @@ const SettingFirst = () => {
         {/* Vibrant Mode */}
         <div className="p-first">
           <div className="flex gap-1 max-w-[230px] flex-col ">
-            <h1>Vibrant Mode</h1>
-            <p className="settings-text">
-              Elevate Your App with Dynamic Motion in Every Interaction
-            </p>
+            <h1>无痕模式</h1>
+            <p className="settings-text">开启后您的浏览不会被记录</p>
           </div>
           <div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 checked={vibrantMode}
-                onChange={() => setVibrantMode((prev) => !prev)}
+                onChange={() => setVibrantMode((prev: any) => !prev)}
                 className="sr-only peer"
               />
               <div

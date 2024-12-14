@@ -15,6 +15,15 @@ module.exports = {
         unselected: '#4B5563',
         player: 'black',
         playerNavigator: '#F54100',
+        source: 'rgba(255, 255, 255, 0.1)',
+        sourceBack: 'rgba(22, 22, 25, 1)',
+        episodeSelected: 'rgba(255, 255, 255, 0.04)',
+        mainColor: 'rgba(245, 65, 0, 1)',
+        unselectedColor: 'rgba(255, 255, 255, 0.8)',
+        commentInput: 'rgba(32, 32, 34, 0.9)',
+        commentIcon: 'rgba(255, 255, 255, 0.6)',
+        channel: '#522B0F',
+        channelSecondary: '#522B0F99',
       },
       fontSize: {
         'xs': '0.75rem',   // Extra small text
@@ -31,6 +40,9 @@ module.exports = {
         sans: ['Inter', 'sans-serif'],
         serif: ['Merriweather', 'serif'],
       },
+      // backgroundImage: {
+      //   noplay: "url('./src/assets/noplay.svg')",
+      // },
     },
   },
   plugins: [],

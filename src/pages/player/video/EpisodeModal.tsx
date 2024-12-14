@@ -1,34 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTimes, faCheck } from "@fortawesome/free-solid-svg-icons";
-
-interface Episode {
-  episode_id: number | null;
-  episode_name: string;
-  play_url: string;
-  from_code: string;
-  ready_to_play: boolean;
-}
-
-interface PlayFrom {
-  name: string;
-  total: number | null;
-  tips: string;
-  code: string;
-  list: Episode[];
-}
-
-interface ModalComponentProps {
-  onClose: () => void;
-  changeSource: (playfrom: PlayFrom) => void;
-  source: "episodes" | "sources";
-  episodes: Episode[];
-  onEpisodeSelect: (episode: Episode) => void;
-  playFrom: PlayFrom[];
-  defaultEpisodeId: number | null;
-  selectedSource: number;
-  setSelectedSource: (source: number) => void;
-}
+import { faTimes } from "@fortawesome/free-solid-svg-icons";
+import { Episode, ModalComponentProps } from '../../../model/videoModel';
 
 const ModalComponent: React.FC<ModalComponentProps> = ({
   onClose,
@@ -49,12 +22,13 @@ const ModalComponent: React.FC<ModalComponentProps> = ({
   );
   const [episodeRange, setEpisodeRange] = useState<[number, number]>([0, 50]);
   const [filteredEpisodes, setFilteredEpisodes] = useState<Episode[]>([]);
+  const [lowerDivHeight, setLowerDivHeight] = useState(0);
 
   useEffect(() => {
     // Combine all episodes from the playFrom list
-    const allEpisodes = playFrom.flatMap((source) => source.list);
-    setFilteredEpisodes(allEpisodes);
-  }, [playFrom]);
+    // const allEpisodes = playFrom.flatMap((source) => source.list);
+    setFilteredEpisodes(episodes);
+    }, [episodes]);
 
   // Handle episode selection and update the state
   const handleEpisodeClick = (episode: Episode) => {
@@ -72,32 +46,59 @@ const ModalComponent: React.FC<ModalComponentProps> = ({
     setSelectedEpisodeId(defaultEpisodeId);
   }, [defaultEpisodeId]);
 
+  const customHeight = () => {
+    const upperDiv = document.getElementById('upper-div');
+    const upperDivHeight = upperDiv?.offsetHeight || 0;
+    const remainingHeight = window.innerHeight - upperDivHeight;
+    return remainingHeight;
+  };
+
+  useEffect(() => {
+    const updateHeight = () => {
+      setLowerDivHeight(customHeight());
+    };
+
+    updateHeight(); // Set initial height
+    window.addEventListener('resize', updateHeight); // Update height on window resize
+
+    return () => {
+      window.removeEventListener('resize', updateHeight); // Cleanup event listener
+    };
+  }, []);
+
+  const modalRef = useRef<any>(null);
+  useEffect(() => {
+    const handleClickOutside = (event: any) => {
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [modalRef]);
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <div className="bg-black backdrop-blur-md w-full max-w-md h-[65vh] rounded-t-xl p-4 text-white">
+      <div className="bg-sourceBack backdrop-blur-md w-full max-w-md rounded-t-xl p-4 text-white" ref={modalRef}
+        style={{ height: `${lowerDivHeight}px` }}>
         <div className="flex justify-between items-center mb-4">
           <div className="flex space-x-6 overflow-x-auto m-auto">
             {/* Episode Tab */}
             <button
-              className={`pb-2 border-b-4 ${
-                activeTab === "episodes"
-                  ? "border-orange-500"
-                  : "border-transparent text-gray-400"
-              }`}
+              className={`pb-2 text-gray-400`}
               onClick={() => setActiveTab("episodes")}
             >
-              Episodes
+              选集
+              {activeTab === "episodes" && <div className="absolute w-[32px] h-1 bg-mainColor rounded-md mt-1"></div>}
             </button>
             {/* Source Tab */}
             <button
-              className={`pb-2 border-b-4 ${
-                activeTab === "sources"
-                  ? "border-orange-500"
-                  : "border-transparent text-gray-400"
-              }`}
+              className={`pb-2 text-gray-400`}
               onClick={() => setActiveTab("sources")}
             >
-              Sources
+              播放源
+              {activeTab === "sources" && <div className="absolute w-[32px] h-1 bg-mainColor rounded-md mt-1 ml-2"></div>}
             </button>
           </div>
           <button onClick={onClose} className="text-white">
@@ -114,17 +115,16 @@ const ModalComponent: React.FC<ModalComponentProps> = ({
                   const start = index * 50;
                   const end = Math.min(start + 50, filteredEpisodes.length);
                   return (
+                    <>
                     <button
                       key={index}
-                      className={`px-4 whitespace-nowrap flex py-2 text-sm text-white ${
-                        episodeRange[0] === start
-                          ? "border-b-4 border-orange-500"
-                          : ""
-                      }`}
+                      className={`px-4 whitespace-nowrap py-2 text-sm`}
                       onClick={() => handleTabClick(start, end)}
                     >
-                      <span>{start + 1}-{end}集</span>
+                      <div className="mb-2">{start + 1}-{end}集</div>
+                      {episodeRange[0] === start && <div className="w-full h-1 bg-mainColor rounded-md"></div>}
                     </button>
+                    </>
                   );
                 })}
               </div>
@@ -137,11 +137,11 @@ const ModalComponent: React.FC<ModalComponentProps> = ({
                       onClick={() => handleEpisodeClick(episode)}
                       className={`py-2 text-center rounded-lg ${
                         episode.episode_id !== selectedEpisodeId
-                          ? "bg-gray-800 text-white"
-                          : "bg-gray-700 text-white"
+                          ? "bg-source text-white"
+                          : "bg-episodeSelected  text-white"
                       }`}
-                    >
-                      {episode.episode_name}
+                    > 
+                      {episode.episode_name.length > 7 ? `${episode.episode_name.substring(0, 100)}...` : episode.episode_name}
                       {episode?.episode_id === selectedEpisodeId && (
                         <span className="transform -translate-x-1/2 loader ml-5 -mt-1.5">
                           <div></div>
@@ -161,9 +161,8 @@ const ModalComponent: React.FC<ModalComponentProps> = ({
                 playFrom.map((source, index) => (
                   <div
                     key={index}
-                    className={`flex justify-between items-center bg-gray-800 p-3 rounded-lg mb-2 cursor-pointer ${
-                      index === selectedSource ? "border border-orange-500" : ""
-                    }`}
+                    className={`flex justify-between items-center p-3 rounded-lg mb-2 cursor-pointer 
+                      ${index === selectedSource ? 'bg-episodeSelected' : 'bg-source'}`}
                     onClick={() => {
                       setSelectedSource(index);
                       changeSource(source);
@@ -172,18 +171,21 @@ const ModalComponent: React.FC<ModalComponentProps> = ({
                     <div>
                       <h4 className="text-white">{source.name}</h4>
                       {/* Display total videos if available */}
+                      <div className="flex justify-between items-center">
                       {source.total && (
-                        <p className="text-gray-400 text-xs">{source.total} 个视频</p>
+                        <p className="bg-source text-white text-xs px-3 py-1.5 my-2 mr-3 rounded-md">{source.total} 个视频</p>
                       )}
                       {/* Display tips if available */}
-                      <p className="text-gray-400 text-xs">
+                      <p className="bg-source text-white text-xs px-3 py-1.5 my-2 rounded-md">
                         {source.tips || "No description available"}
                       </p>
+                      </div>
                     </div>
                     {index === selectedSource && (
-                      <span className="text-orange-500">
-                        <FontAwesomeIcon icon={faCheck} className="text-lg" />
-                      </span>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="9" fill="#F54100"/>
+                      <path d="M10.5 13.6032L16.0152 8.0874L16.8642 8.9358L10.5 15.3L6.68158 11.4816L7.52998 10.6332L10.5 13.6032Z" fill="white"/>
+                      </svg>
                     )}
                   </div>
                 ))}

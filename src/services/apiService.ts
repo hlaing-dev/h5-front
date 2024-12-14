@@ -1,42 +1,25 @@
-import axios from 'axios';
-import { encryptWithRsa, generateSignature } from './encryptionService';
+// api.ts
+import axios from "axios";
 
-const API_URL = '';
+// Create an instance of Axios
+const api = axios.create({
+  baseURL: process.env.REACT_APP_API_URL, // Base URL for your API
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
-// Service function to make a POST request
-export async function postRequest(endpoint: string, data: object) {
-    const encryptedData = encryptWithRsa(JSON.stringify(data));
-    const signature = generateSignature(encryptedData);
-
-    try {
-        const response = await axios.post(`${API_URL}${endpoint}`, {
-            pack: encryptedData,
-            signature: signature
-        });
-
-        return response.data;
-    } catch (error) {
-        console.error('API POST Error:', error);
-        throw error;
+// Add middleware to inject authorization token in headers
+api.interceptors.request.use(
+  (config) => {
+    const authToken = localStorage.getItem("authToken");
+    if (authToken) {
+      const loginInfo = JSON.parse(authToken);
+      config.headers.Authorization = `${loginInfo?.data?.token_type} ${loginInfo?.data?.access_token}`;
     }
-}
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
-// Service function to make a GET request
-export async function getRequest(endpoint: string, params: object = {}) {
-    const encryptedData = encryptWithRsa(JSON.stringify(params));
-    const signature = generateSignature(encryptedData);
-
-    try {
-        const response = await axios.get(`${API_URL}${endpoint}`, {
-            params: {
-                pack: encryptedData,
-                signature: signature
-            }
-        });
-
-        return response.data;
-    } catch (error) {
-        console.error('API GET Error:', error);
-        throw error;
-    }
-}
+export default api;

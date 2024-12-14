@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { useGetTagsQuery } from "../services/searchApi";
 
 interface FilterProps {
   resActive: string;
@@ -11,6 +10,7 @@ interface FilterProps {
   res_type: any;
   sort: any;
   type: any;
+  movies: any;
 }
 
 const Filter: React.FC<FilterProps> = ({
@@ -23,8 +23,14 @@ const Filter: React.FC<FilterProps> = ({
   res_type,
   sort,
   type,
+  movies,
 }) => {
   const [showTabs, setShowTabs] = useState(false);
+
+  // Dynamically update the filter button text based on selections
+  const [filterText, setFilterText] = useState<JSX.Element | string>(
+    "按电影名称"
+  ); // Default text
 
   const handleFilterClick = () => {
     setShowTabs((prevShowTabs) => !prevShowTabs);
@@ -60,15 +66,72 @@ const Filter: React.FC<FilterProps> = ({
     setShowTabs(false);
   }, [resActive, sortActive, typeActive]);
 
+  useEffect(() => {
+    let selectedFilterText: JSX.Element | string = "按电影名称"; // Default text
+
+    if (res_type) {
+      const selectedRes = res_type.find((res: any) => res.value === resActive);
+      if (selectedRes && selectedRes.value !== res_type[0]?.value) {
+        selectedFilterText = <>{selectedRes.name}</>;
+      }
+    }
+
+    if (sort) {
+      const selectedSort = sort.find((res: any) => res.value === sortActive);
+      if (selectedSort && selectedSort.value !== sort[0]?.value) {
+        selectedFilterText = (
+          <span>
+            {selectedFilterText}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="4"
+              height="4"
+              viewBox="0 0 4 4"
+              fill="none"
+              className="mx-1"
+            >
+              <circle cx="2" cy="2" r="2" fill="white" />
+            </svg>
+            {selectedSort.name}
+          </span>
+        );
+      }
+    }
+
+    if (type) {
+      const selectedType = type.find((res: any) => res.id === typeActive);
+      if (selectedType && selectedType.id !== type[0]?.id) {
+        selectedFilterText = (
+          <span>
+            {selectedFilterText}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="4"
+              height="4"
+              viewBox="0 0 4 4"
+              fill="none"
+              className="mx-1"
+            >
+              <circle cx="2" cy="2" r="2" fill="white" />
+            </svg>
+            {selectedType.name}
+          </span>
+        );
+      }
+    }
+
+    setFilterText(selectedFilterText);
+  }, [resActive, sortActive, typeActive, res_type, sort, type]);
+
   return (
-    <div>
+    <div className="">
       {/* Filter Button */}
-      <div className="flex items-center mt-[70px] justify-center relative">
+      <div className="flex items-center justify-center relative">
         <button
           onClick={handleFilterClick}
-          className="flex gap-1 items-center relative z-1"
+          className="flex gap-1 mt-1 items-center relative z-1"
         >
-          <span className="filter-title">按电影名称</span>
+          <span className="filter-title">{filterText}</span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="9"
@@ -88,14 +151,14 @@ const Filter: React.FC<FilterProps> = ({
       {/* Overlay (Only below the tabs) */}
       {showTabs && (
         <div
-          className="fixed inset-x-0 top-[80px]   bottom-0 bg-black bg-opacity-50 z-10"
+          className="fixed inset-x-0 top-[80px] bottom-0 bg-black bg-opacity-50 z-10"
           onClick={handleCloseTabs}
         />
       )}
 
       {/* Tabs Container */}
       <div
-        className={`overflow-hidden transition-all duration-500 ease-in-out fixed top-[55px] left-0 w-full tab-main text-white z-20 rounded-lg ${
+        className={`overflow-hidden mt-3 transition-all duration-500 ease-in-out fixed top-[55px] left-0 w-full tab-main text-white z-20 rounded-lg ${
           showTabs ? "max-h-52" : "max-h-0"
         }`}
       >
@@ -152,6 +215,9 @@ const Filter: React.FC<FilterProps> = ({
             ))}
           </div>
         </div>
+      </div>
+      <div className="movie_title px-4 py-1">
+        共 {movies?.length} 条搜索结果
       </div>
     </div>
   );

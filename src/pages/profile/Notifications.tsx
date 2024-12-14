@@ -4,9 +4,11 @@ import Sidebar from "./components/notifications/Sidebar";
 import Content from "./components/notifications/Content";
 import "./profile.css";
 import { useGetNotificationQuery } from "./services/profileApi";
-import { useGetAdsQuery } from "../search/services/searchApi";
+// import { useGetAdsQuery } from "../search/services/searchApi";
 import Ads from "../search/components/Ads";
 import Loader from "../search/components/Loader";
+import NewAds from "../../components/NewAds";
+import { useGetAdsQuery } from "../../services/helperService";
 
 const Notifications = () => {
   const { data, isLoading, isFetching } = useGetNotificationQuery(); // Fetch data from API
@@ -34,8 +36,6 @@ const Notifications = () => {
         <Loader />
       </div>
     );
-
-  console.log(data);
 
   const advert = ads?.data?.notice_up?.data;
 
@@ -74,7 +74,8 @@ const Notifications = () => {
         <div className="border-b-[1px] border-[#242426] mb-5"></div>
 
         {/* Ads */}
-        <Ads advert={advert} />
+        {/* <Ads advert={advert} /> */}
+        <NewAds section="notice_up" />
 
         {/* Sidebar and Content */}
         <div className="grid grid-cols-3 gap-2 mt-10 h-full pb-[100px]">

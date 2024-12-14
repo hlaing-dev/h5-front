@@ -2,57 +2,53 @@ import { useState, useEffect } from "react";
 import Navbar from "./components/history/Navbar";
 import Main from "./components/history/Main";
 import "./profile.css";
+import { useGetRecordQuery } from "./services/profileApi";
+import Loader from "../search/components/Loader";
+import NewAds from "../../components/NewAds";
 
 const History = () => {
+  const isLoggedIn = localStorage.getItem("authToken");
+  const parsedLoggedIn = isLoggedIn ? JSON.parse(isLoggedIn) : null;
+  const token = parsedLoggedIn?.data?.access_token;
+  const { data, isLoading, isFetching, refetch } = useGetRecordQuery(
+    undefined,
+    { skip: !token }
+  ); // Fetch favorite movies list from API
+
   const [isEditMode, setIsEditMode] = useState(false);
-  const [movies, setMovies] = useState<any[]>([]);
 
-  // Load data from localStorage
-  useEffect(() => {
-    const watchHistory = localStorage.getItem("lastWatchHistory");
-    if (watchHistory) {
-      const parsedData = JSON.parse(watchHistory);
-
-      const movieDetails = [];
-
-      for (const key in parsedData) {
-        const movieData = parsedData[key];
-
-        movieDetails.unshift({
-          id: movieData.movieId,
-          name: key,
-          duration: movieData?.duration,
-          playedTime: movieData?.playedTime,
-          episode_name: movieData.episode_name,
-          last_episodeid: movieData.episode_id,
-          progress_time: movieData.progressTime,
-          cover: movieData.image, // Assuming cover is not part of new data, update with your default cover
-        });
-      }
-
-      setMovies(movieDetails);
-    }
-  }, []);
+  const movies = data?.data;
 
   const handleEditClick = () => {
     setIsEditMode((prev) => !prev);
   };
+
+  if (isLoading || isFetching) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-[#161616]">
+        <Loader />
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="fixed-bg"></div>
       <div className="text-white">
         <Navbar isEditMode={isEditMode} onEditClick={handleEditClick} />
-        {movies.length !== 0 ? (
+        {movies?.length > 0 ? (
           <Main
             isEditMode={isEditMode}
             setIsEditMode={setIsEditMode}
             movies={movies}
-            setMovies={setMovies}
+            refetch={refetch}
           />
         ) : (
-          <div className="flex justify-center items-center text-center h-[80vh]">
-            <div>
+          <div className="h-[80vh] mt-20">
+            <div className="w-full">
+              <NewAds section="play_record_up" />
+            </div>
+            <div className="flex flex-col justify-center items-center text-center h-[50vh]">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="118"
@@ -245,7 +241,7 @@ const History = () => {
                   fill="#565454"
                 />
               </svg>
-              <p className="no_history">No History</p>
+              <p className="no_history">空空如也</p>
             </div>
           </div>
         )}

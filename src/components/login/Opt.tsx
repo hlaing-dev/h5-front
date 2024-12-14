@@ -1,27 +1,61 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { startTransition, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { setOpenUserNameForm, setOtpOpen, setSignUpEmail } from "../../features/login/ModelSlice";
-import { getOtp, registerEmail, registerPhone } from "../../services/userService";
+import {
+  setAuthModel,
+  setLoginOpen,
+  setOpenUserNameForm,
+  setOtpOpen,
+  setSignUpEmail,
+  setSignupOpen,
+} from "../../features/login/ModelSlice";
+import { getOtp, signup, signupPh } from "../../services/userService";
 import back from "../../assets/login/back.svg";
+import { showToast } from "../../pages/profile/error/ErrorSlice";
+import {
+  useSignUpEmailMutation,
+  useSignUpPhoneMutation,
+} from "../../features/login/RegisterApi";
+import ErrorToast from "../../pages/profile/error/ErrorToast";
+import { decryptWithAes } from "../../services/newEncryption";
 
 interface OptProps {
   email?: string;
   password?: string;
   phone?: string;
+  key: string;
   setIsVisible: (isVisible: boolean) => void;
 }
+interface messg {
+  msg: string;
+}
 
-const Opt: React.FC<OptProps> = ({ email, password, phone, setIsVisible }) => {
+const Opt: React.FC<OptProps> = ({
+  email,
+  password,
+  phone,
+  setIsVisible,
+  key,
+}) => {
+  const [signUpEmail, { isLoading, error }] = useSignUpEmailMutation();
+  const [signUpPhone, { isLoading: phload }] = useSignUpPhoneMutation();
+  const [panding,setPanding] = useState(false)
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(""));
   const [timer, setTimer] = useState<number>(59);
   const [buttonText, setButtonText] = useState<string>("59 s");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { captchaCode, captchaKey, openSignUpEmailModel } = useSelector(
-    (state: any) => state.model
-  );
+  const { captchaCode, captchaKey, openSignUpEmailModel, GraphicKey } =
+    useSelector((state: any) => state.model);
+
+  useEffect(() => {
+    if (email) {
+      getOtp(GraphicKey, email, "email");
+    } else if (phone) {
+      getOtp(GraphicKey, phone, "phone");
+    }
+  }, [email, phone]);
 
   useEffect(() => {
     const countdown = setInterval(() => {
@@ -33,16 +67,17 @@ const Opt: React.FC<OptProps> = ({ email, password, phone, setIsVisible }) => {
 
     return () => clearInterval(countdown);
   }, [timer]);
+  // console.log(GraphicKey)
 
-  useEffect(() => {
-    if (email) {
-      getOtp(captchaCode, captchaKey, email, "email");
-    } else if (phone) {
-      getOtp(captchaCode, captchaKey, phone, "phone");
-    }
-  }, [captchaCode, email]);
+  const closeAllModals = () => {
+    startTransition(() => {
+      dispatch(setAuthModel(false));
+      dispatch(setLoginOpen(false));
+      dispatch(setSignupOpen(false));
+    });
+  };
 
-  const handleOTPChange = (index: number, value: string) => {
+  const handleOTPChange = async (index: number, value: string) => {
     const updatedOTP = [...otpDigits];
     updatedOTP[index] = value;
     setOtpDigits(updatedOTP);
@@ -50,28 +85,41 @@ const Opt: React.FC<OptProps> = ({ email, password, phone, setIsVisible }) => {
     if (value && index < inputRefs.current.length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
+    if (!value && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
 
     // Handle OTP submission when all digits are filled
     if (updatedOTP.every((digit) => digit)) {
+      // Remove focus from all inputs
+      inputRefs.current.forEach((input) => input?.blur());
+
       const otpCode = updatedOTP.join("");
+      try {
+        if(email && password){
+          setPanding(true)
+          const data: any = await signup({ email, password, email_code: otpCode });
+          if(data){
+            dispatch(setOtpOpen(false));
+            localStorage.setItem("authToken", JSON.stringify(data));
+            setTimeout(() => closeAllModals(), 1000);
+          }
 
-      if (email && password) {
-        registerEmail(email, password, otpCode) // Registration for email
-        .then((registerResponse) => {
-          // Store registration response (e.g., auth token) in localStorage
-          localStorage.setItem("authToken", JSON.stringify(registerResponse.data));
-
-          // Redirect to home after registration
-          // setTimeout(() => {
-          //   navigate("/home");
-          // }, 1000);
-        }).catch((error) => console.error("Error during registration:", error));
-      } else if (phone && password) {
-        registerPhone(phone, password, otpCode) // Registration for phone
-          .then(() => navigate("/profile"))
-          .catch((error) =>
-            console.error("Error during phone registration:", error)
-          );
+        }else if(phone && password){
+          setPanding(true)
+          const data: any = await signupPh({ phone, password, sms_code: otpCode });
+          if(data){
+            dispatch(setOtpOpen(false));
+            localStorage.setItem("authToken", JSON.stringify(data));
+            setTimeout(() => closeAllModals(), 1000);
+          }
+        }
+      } catch (err : any) {
+        const Errmessage = err.response.data.msg;
+           dispatch(showToast({ message: Errmessage, type: "error" }));
+           setPanding(false)
+        inputRefs.current.forEach((input) => input?.focus()); // Optional: Refocus on inputs i
+        // console.log(err,'email')
       }
     }
   };
@@ -80,7 +128,13 @@ const Opt: React.FC<OptProps> = ({ email, password, phone, setIsVisible }) => {
     if (email) {
       setTimer(59);
       setOtpDigits(Array(6).fill(""));
-      getOtp(captchaCode, captchaKey, email, "email");
+      getOtp(GraphicKey, email, "email");
+      dispatch(showToast({ message: "验证码已成功重新发送", type: "success" }));
+    } else if (phone) {
+      setTimer(59);
+      setOtpDigits(Array(6).fill(""));
+      getOtp(GraphicKey, phone, "phone");
+      dispatch(showToast({ message: "验证码已成功重新发送", type: "success" }));
     }
   };
 
@@ -90,11 +144,16 @@ const Opt: React.FC<OptProps> = ({ email, password, phone, setIsVisible }) => {
   };
 
   return (
-    <div className="w-screen h-screen absolute z-[9090909] bg-[#161619] p-[20px]">
-      <div className="flex justify-between w-2/3">
-        <img src={back} alt="Back" onClick={handleBack} />
+    <div className=" fixed top-0 w-screen h-screen  z-[9090900909] bg-[#161619] p-[20px]">
+      <div className=" flex justify-center items-center">
+        <img
+          className=" absolute top-[20px] left-[20px] z-[9999008819]"
+          onClick={handleBack}
+          src={back}
+          alt="Back"
+        />{" "}
         <h1 className="text-white text-[16px] font-semibold leading-[20px]">
-          OTP Verification
+          验证码
         </h1>
       </div>
 
@@ -114,26 +173,34 @@ const Opt: React.FC<OptProps> = ({ email, password, phone, setIsVisible }) => {
         </div>
 
         <p className="text-[#888] text-[10px] font-light leading-[15px] p-3 text-center">
-          Verification code sent to{" "}
-          <span className="text-white">DevelopX10@gmail.com</span> /{" "}
-          <span className="text-white">+868880818.</span> Please check your
-          messages and spam folder.
+          验证码已发送至 <span className=" text-white">{email}</span>{" "}
+          <span className="text-white">{phone}</span> 请
+
+          检查您的邮件并确保检查您的垃圾邮件文件夹{" "}
         </p>
       </div>
 
-      <div className="w-full">
-        <button
-          disabled={timer > 0}
-          onClick={resendOtp}
-          className={`w-full px-[15px] py-[10px] text-[16px] font-semibold leading-[22px] ${
-            timer > 0
-              ? "otp_button text-white"
-              : "bg-white rounded-full text-black"
-          }`}
-        >
-          {buttonText}
-        </button>
+      <div className="w-full flex justify-center items-center">
+        { panding ? (
+          <button
+            disabled
+            className="next_button text-[#777] w-[320px] text-[14px] font-[600] leading-[22px]  mt-[20px] py-[10px] px-[16px] rounded-[80px]"
+          >
+            加载中..
+          </button>
+        ) : (
+          <button
+            disabled={timer > 0}
+            onClick={resendOtp}
+            className={`w-[320px] text-[14px] font-[600] leading-[22px]  mt-[20px] py-[10px] px-[16px] rounded-[80px] ${
+              timer > 0 ? "next_button text-[#777]" : "login_button text-white"
+            }`}
+          >
+            {buttonText}
+          </button>
+        )}
       </div>
+      <ErrorToast />
     </div>
   );
 };

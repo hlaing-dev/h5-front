@@ -31,13 +31,12 @@ const LoginForm: React.FC = () => {
 
   const getCaptcha = async () => {
     try {
-      const result = await fetch(`${API_URL}v1/user/get_captcha`, {
+      const result = await fetch(`${API_URL}/user/get_captcha`, {
         method: "GET",
       });
-      console.log(result);
+
       const captcha = await result.json();
 
-      console.log(captcha);
       setCaptchaImage(captcha.data.base64);
       setkeyStatus(captcha.data.key);
 

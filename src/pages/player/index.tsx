@@ -1,245 +1,356 @@
-import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import VideoPlayer from "./video/VideoPlayer";
 import SourceSelector from "./video/SourceSelector";
 import DetailSection from "./video/DetailSection";
 import EpisodeSelector from "./video/EpisodeSelector";
 import Loader from "../search/components/Loader";
+import noPlayImage from "../../assets/noplay.svg";
+import RecommendedList from "./video/RecommendedList";
+import AdsSection from "./video/AdsSection";
+import NetworkError from "./video/NetworkError";
+import { Episode, MovieDetail, AdsData } from "../../model/videoModel";
+import {
+  getMovieDetail,
+  getAdsData,
+  getEpisodesBySource,
+  reportPlaybackProgress,
+  parsePlaybackUrl,
+  fetchCommentData
+} from "../../services/playerService";
+import NewAds from "../../components/NewAds";
+import { convertToSecureUrl, decryptWithAes } from "../../services/newEncryption";
+import PlayerLoading from './video/PlayerLoading';
 
-interface Episode {
-  episode_id: number | null;
-  episode_name: string;
-  play_url: string;
-  from_code: string;
-  ready_to_play: boolean;
-}
-
-interface PlayFrom {
-  name: string;
-  total: number | null;
-  tips: string;
-  code: string;
-}
-
-interface MovieDetail {
-  code: string;
-  name: string;
-  area: string;
-  year: string;
-  score: string;
-  is_collect: boolean;
-  content: string;
-  cover: string;
-  type_name: string;
-  tags: { name: string }[];
-  comments_count: string;
-  popularity_score: number;
-  play_from: {
-    name: string;
-    code: string;
-    list: Episode[];
-    total: number | null;
-    tips: string;
-  }[];
-  members: { name: string; type: number }[];
-}
-
-interface AdsData {
-  [key: string]: {
-    type: number;
-    location_id: number;
-    channel: string;
-    remarks: string;
-    data: {
-      image: string;
-      url: string;
-    };
-  };
-}
 const DetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [movieDetail, setMovieDetail] = useState<MovieDetail | null>(null);
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
-  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const [adsData, setAdsData] = useState<AdsData | null>(null);
-  const [episodes, setEpisodes] = useState<Episode[]>([]);
-  const [selectedSource, setSelectedSource] = useState(0); // Track the selected source
+  const [selectedSource, setSelectedSource] = useState(0);
   const [activeTab, setActiveTab] = useState("tab-1");
-
+  const [resumeTime, setResumeTime] = useState(0);
+  const [wholePageError, setWholePageError] = useState(false);
+  const [errorVideoUrl, setErrorVideoUrl] = useState("");
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [episodes, setEpisodes] = useState<any>([]);
+  const [forwardedCount, setForwardedCount] = useState(-1);
+  const [movieReload, setMovieReload] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
+  const [visible, setVisible] = useState(false);
   const navigate = useNavigate();
 
-  // Fetch the movie details based on the provided id
-  const getMovieDetail = async () => {
-    const loginResponse = await localStorage.getItem("authToken");
-    const loginInfo = loginResponse ? JSON.parse(loginResponse) : null;
-    const authorization = loginInfo && loginInfo.data && loginInfo.data.token_type ? `${loginInfo.data.token_type} ${loginInfo.data.access_token}` : '';
-    if(!authorization) {
-      localStorage.removeItem('authToken');
-    }
-    const header = authorization ? {
-      method: "GET",
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authorization,
-      }} : {method: "GET"};
-    const res = await fetch(
-      `https://cc3e497d.qdhgtch.com:2345/api/v1/movie/detail?id=${id}`, header);
-    const data = await res.json();
-    setMovieDetail(data?.data);
+  useEffect(()=>{
+    fetchComments();
+  },[])
 
-    if (data?.data?.play_from?.[0]?.list?.[0]) {
-      setCurrentEpisode(data.data.play_from[0].list[0]); // Set the first episode as default
+  const fetchComments = async () => {
+    try {
+      const response: any = await fetchCommentData(id || '');
+      if (response) {
+        const data: any = await decryptWithAes(response);
+        setCommentCount(data?.data?.total);
+      }
+    } catch (err) {
+      console.log('err is=>', err);
+    }
+  }
+  const autoPlayNextEpisode = async () => {
+    if (!movieDetail?.play_from) return;
+    for (let i = selectedSource + 1; i < movieDetail.play_from.length; i++) {
+      const nextSource = movieDetail.play_from[i];
+      try {
+        const res = await getEpisodesBySource(nextSource.code, id || "");
+        setCurrentEpisode(res.data[0]);
+        setEpisodes(res.data);
+        setSelectedSource(i);
+        if (res.data?.[0]) {
+          setWholePageError(false);
+        } 
+        return;
+      } catch (error) {
+        console.error("Error auto-playing next episode:", error);
+      }
     }
   };
 
-  const handleSelectedSource = async (ind: number) => {
-    const code = movieDetail?.play_from[ind]?.code;
-    const res = await fetch(
-      `https://cc3e497d.qdhgtch.com:2345/api/v1/movie_addr/list?from_code=${code}&movie_id=${id}`
-    );
-    const data = await res.json();
-    if (data.data[0].ready_to_play) {
-      setSelectedSource(ind);
-    }
-  };
-
-  const getEpisodes = async (code: string) => {
-    const res = await fetch(
-      `https://cc3e497d.qdhgtch.com:2345/api/v1/movie_addr/list?from_code=${code}&movie_id=${id}`
-    );
-    const data = await res.json();
-    console.log("data is=>", data);
-    if (data.data[0].ready_to_play) {
-      setCurrentEpisode(data.data[0]);
-      setEpisodes(data.data);
-    } else {
-      setSelectedSource(selectedSource);
-      alert("Channel Unavailable");
-    }
-    // setMovieDetail(data?.data);
-
-    // if (data?.data?.play_from?.[0]?.list?.[0]) {
-    //   setCurrentEpisode(data.data.play_from[0].list[0]); // Set the first episode as default
-    // }
-  };
   useEffect(() => {
     if (id) {
-      getMovieDetail();
-      getAdsData();
+      setWholePageError(false);
+      fetchMovieDetail();
+      fetchAdsData();
     }
   }, [id]);
 
-  const getAdsData = async () => {
-    const res = await fetch(
-      "https://cc3e497d.qdhgtch.com:2345/api/v1/advert/config"
-    );
-    const data = await res.json();
-    setAdsData(data);
-    console.log("data is=>", data);
-  };
-  const handleEpisodeChange = (episode: Episode) => {
-    setCurrentEpisode(episode);
+  const fetchAdsData = async () => {
+    try {
+      const res = await getAdsData();
+      setAdsData(res.data);
+    } catch (error) {
+      console.error("Error fetching ads data:", error);
+    }
   };
 
-  const handleEpisodeSelect = (episode: Episode) => {
-    setSelectedEpisode(episode);
+  const fetchMovieDetail = async (movieId = "") => {
+    try {
+      const res = await getMovieDetail(movieId || id || "");
+      await setInitialEpisode(res?.data);
+      await setMovieDetail(res?.data);
+      setWholePageError(false)
+      setMovieReload(false);
+    } catch (error) {
+      console.error("Error fetching movie details:", error);
+      setMovieReload(false);
+    }
   };
 
-  const navigateBackFunction = () => {
-    navigate(-1); // Go back to the previous page
-  };
+  const setInitialEpisode = async (mvDetail: any) => {
+    if (mvDetail) {
+      const playBackInfo = mvDetail.last_playback;
+      if (playBackInfo && playBackInfo.movie_from) {
+        const sourceIndex = mvDetail?.play_from?.findIndex(
+          (x: any) => x.code === playBackInfo.movie_from
+        );
+        if (sourceIndex > -1) {
+          const episodeIndex = mvDetail?.play_from[
+            sourceIndex
+          ]?.list?.findIndex(
+            // eslint-disable-next-line eqeqeq
+            (x: any) => x.episode_id == playBackInfo.episode_id
+          );
+          if (episodeIndex > -1) {
+            const mvData = mvDetail?.play_from[sourceIndex]?.list[episodeIndex];
+            if(!mvData.ready_to_play) {
+              const parseData = await parsePlaybackUrl(mvData.episode_id, mvData.from_code, mvData.play_url, '1');
+              mvData.play_url = parseData?.data?.play_url;
+            }
+            setCurrentEpisode(mvData);
+            setEpisodes(mvDetail?.play_from[sourceIndex]?.list);
+            setResumeTime(playBackInfo.current_time);
+            return;
+          } else {
 
-  // if (!movieDetail || !currentEpisode) {
-  //   return <div className="flex justify-center items-center mt-52 bg-black w-full" style={{height: '100vh'}}>
-  //   <Loader />
-  // </div>;
-  // }
-
-  const changeSource = (playfrom: PlayFrom) => {
-    if (movieDetail?.play_from) {
-      const ind: number = movieDetail?.play_from.findIndex(
-        (x) => x.code === playfrom.code
-      );
-      if (ind >= 0) {
-        getEpisodes(movieDetail?.play_from[ind]?.code || "");
-        if (movieDetail?.play_from[ind]?.list?.[0]) {
-          setCurrentEpisode(movieDetail.play_from[ind].list[0]); // Set the first episode as default
-          setSelectedEpisode(movieDetail.play_from[ind].list[0]); // Set the first episode as default
+          }
+        }
+      } else {
+        // Fallback to the first available episode
+        if (mvDetail?.play_from?.[0]?.list?.[0]) {
+          const mvData = mvDetail?.play_from[0].list[0];
+          if(!mvData.ready_to_play) {
+            try {
+              const parseData = await parsePlaybackUrl(mvData.episode_id, mvData.from_code, mvData.play_url, '1');
+              mvData.play_url = await parseData?.data?.play_url;
+              setCurrentEpisode(mvData);
+              setResumeTime(0);
+            } catch(err) {
+              setCurrentEpisode(mvData);
+              setWholePageError(true);
+            }
+          } else {
+            setCurrentEpisode(mvData);
+            setResumeTime(0);
+          }
+            setEpisodes(mvDetail?.play_from[0].list);
+        } else {
+          setWholePageError(true);
+        }
+        if(mvDetail?.play_from && mvDetail?.play_from.length === 0) {
+          setWholePageError(true);
         }
       }
     }
   };
 
+  const handleEpisodeSelect = (episode: Episode) => {
+    // Cancel any ongoing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setCurrentEpisode(episode);
+    setWholePageError(false);
+    setResumeTime(0);
+  };
+
+  const navigateBackFunction = () => {
+    if (currentEpisode) {
+      reportProgress(currentEpisode);
+    }
+    setCurrentEpisode(null);
+    navigate(forwardedCount);
+    // navigate("/home");
+  };
+
+  const reportProgress = async (episode: Episode) => {
+    if (!movieDetail || !episode) return;
+    try {
+      await reportPlaybackProgress(
+        movieDetail.id,
+        episode?.episode_id?.toString() || "",
+        episode.from_code,
+        movieDetail.last_playback?.duration || 0,
+        resumeTime || 0
+      );
+    } catch (error) {
+      console.error("Error reporting playback progress:", error);
+    }
+  };
+
+  const switchNow = () => {
+    setWholePageError(false);
+    autoPlayNextEpisode();
+  };
+
+  useEffect(() => {
+    if(currentEpisode) {
+      window.scrollTo(0, 0);
+    }
+  }, [movieDetail, currentEpisode]);
+  
+  const handleVideoError = (errorUrl: string) => {
+    if (errorVideoUrl !== errorUrl && errorUrl) {
+      setErrorVideoUrl(errorUrl);
+      setWholePageError(true);
+    }
+  };
+
+  const handleChangeSource = async (nextSource: any) => {
+    if (nextSource && nextSource.code && id) {
+      try {
+        const res = await getEpisodesBySource(nextSource.code, id || "");
+        const mvData = res.data?.[0];
+        setWholePageError(false);
+        if (!mvData?.ready_to_play) {
+          const data = mvData;
+          const response = await parsePlaybackUrl(data.episode_id, data.from_code, data.play_url, '1');
+          mvData.play_url = response?.data?.play_url;
+        }
+        setCurrentEpisode(res.data[0]);
+        setEpisodes(res.data);
+      } catch (error) {
+        console.error("Error auto-playing next episode:", error);
+      }
+    }
+  };
+
+  const refresh = () => {
+    // setCurrentEpisode(null);
+    setMovieReload(true);
+    fetchMovieDetail(movieDetail?.id);
+  }
+
+  const showRecommandMovie = (id: string) => {
+    setCurrentEpisode(null);
+    setMovieDetail(null);
+    fetchMovieDetail(id);
+  }
   return (
-    <div className="bg-black overflow-y-scroll min-h-screen">
-      {!movieDetail || !currentEpisode ? (
-        <div className="flex justify-center items-center mt-52 bg-black">
-          <Loader />
-        </div>
+    <div className="bg-background min-h-screen">
+      {!movieDetail ? (
+        <>
+          <PlayerLoading onBack={navigateBackFunction}/>
+          <div className="flex justify-center items-center pt-52 bg-background">
+            <Loader />
+          </div>
+        </>
       ) : (
         <>
-          {(selectedEpisode && selectedEpisode.ready_to_play) ||
-          (currentEpisode && currentEpisode.ready_to_play) ? (
-            <VideoPlayer
-              videoUrl={
-                selectedEpisode?.play_url || currentEpisode?.play_url || ""
-              }
-              onBack={navigateBackFunction}
-              movieDetail={movieDetail} // Pass movie details to DetailSection
-              selectedEpisode={selectedEpisode || currentEpisode}
-            />
-          ) : (
-            <div className="relative flex justify-center items-center w-full min-h-[50vh] my-8">
-              <div className="absolute inset-0 bg-black opacity-75"></div>
-              <div className="relative z-10 flex flex-col items-center p-8 bg-opacity-90 text-center text-white rounded-lg shadow-lg max-w-md mx-auto">
-                <p className="text-2xl font-bold mb-6 tracking-wider">
-                  Oops! Video Not Found
-                </p>
-                <button
-                  className="px-8 py-3 bg-gradient-to-r from-blue-500 to-teal-400 text-white font-semibold rounded-full shadow-md hover:from-teal-400 hover:to-blue-500 hover:shadow-lg transition-all duration-300 ease-in-out"
-                  onClick={navigateBackFunction}
+          <div className="sticky top-0 z-50">
+            <div id="upper-div">
+              {(currentEpisode && !wholePageError) || movieReload ? (
+              <VideoPlayer
+                key={currentEpisode?.episode_id}
+                videoUrl={currentEpisode?.play_url || ''}
+                onBack={navigateBackFunction}
+                movieDetail={movieDetail}
+                selectedEpisode={currentEpisode}
+                resumeTime={resumeTime}
+                handleVideoError={handleVideoError}
+              />
+            ) : (
+              <NetworkError switchNow={switchNow} refresh={refresh} onBack={navigateBackFunction}/>
+            )}
+            </div>
+            <div
+              className="relative flex px-2 justify-between items-center bg-background"
+              style={{
+                paddingBottom: "10px",
+                borderBottom: "2px solid #2a2a2a",
+              }}
+            >
+              <div className="flex">
+                <div
+                  className={`px-4 py-3 bg-background text-gray-400 rounded-t-lg cursor-pointer relative ${
+                    activeTab === "tab-1" ? "text-white z-10" : ""
+                  }`}
+                  onClick={() => setActiveTab("tab-1")}
                 >
-                  Go Back
-                </button>
+                  <span className="text-white">详情{movieReload}</span>
+                  {activeTab === "tab-1" && (
+                    <div className="absolute bottom-0 left-3 w-4/6 h-1 bg-mainColor rounded-md"></div>
+                  )}
+                </div>
+                <div
+                  className={`px-4 py-3 bg-background text-gray-400 rounded-t-lg cursor-pointer relative ${
+                    activeTab === "tab-2" ? "text-white z-10" : ""
+                  }`}
+                  onClick={() => setActiveTab("tab-2")}
+                >
+                  <span>评论</span>
+                  <span className="text-gray-500 ml-1.5 text-sm">
+                    {commentCount > 99 ? "99+" : commentCount || 0}
+                  </span>
+                  {activeTab === "tab-2" && (
+                    <div className="absolute bottom-0 left-3.5 w-3/6 h-1 bg-mainColor rounded-md"></div>
+                  )}
+                </div>
               </div>
             </div>
-          )}
+          </div>
 
-          <DetailSection
-            adsData={adsData}
-            movieDetail={movieDetail} // Pass movie details to DetailSection
-            id={id || ""}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-          />
-          {activeTab === "tab-1" && (
-            <>
-              <SourceSelector
-                changeSource={changeSource}
-                episodes={
-                  episodes && episodes.length > 0
-                    ? episodes
-                    : movieDetail.play_from[0]?.list || []
-                }
-                onEpisodeChange={handleEpisodeChange}
-                onEpisodeSelect={handleEpisodeSelect}
-                selectedEpisode={selectedEpisode || currentEpisode}
-                movieDetail={movieDetail} // Pass movie details to DetailSection
-                selectedSource={selectedSource}
-                setSelectedSource={handleSelectedSource}
-              />
-              <EpisodeSelector
-                episodes={
-                  episodes && episodes.length > 0
-                    ? episodes
-                    : movieDetail.play_from[0]?.list || []
-                }
-                onEpisodeSelect={handleEpisodeSelect}
-                selectedEpisode={selectedEpisode || currentEpisode}
-              />
-            </>
-          )}
+          <div className={`${activeTab === "tab-1" && "overflow-y-scroll"}`}>
+            <DetailSection
+              adsData={adsData}
+              movieDetail={movieDetail}
+              id={id || ""}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              setCommentCount={setCommentCount}
+              commentCount={commentCount}
+            />
+            {activeTab === "tab-1" && (
+              <>
+                <SourceSelector
+                  changeSource={handleChangeSource}
+                  episodes={episodes || []}
+                  selectedEpisode={currentEpisode}
+                  onEpisodeSelect={handleEpisodeSelect}
+                  movieDetail={movieDetail}
+                  selectedSource={selectedSource}
+                  setSelectedSource={setSelectedSource}
+                />
+                <EpisodeSelector
+                  episodes={episodes || []}
+                  onEpisodeSelect={handleEpisodeSelect}
+                  selectedEpisode={currentEpisode}
+                />
+
+                <div className="mt-8 px-4">
+                  {/* {adsData && <AdsSection adsDataList={adsData?.player_recommend_up} />} */}
+                  <NewAds section={"player_recommend_up"} fromMovie={true} />
+                </div>
+                <RecommendedList
+                  data={movieDetail}
+                  showRecommandMovie={showRecommandMovie}
+                />
+              </>
+            )}
+          </div>
         </>
+      )}
+      {visible && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background text-white text-lg font-medium px-4 py-2 rounded-lg shadow-md">
+          没有更多资源了
+        </div>
       )}
     </div>
   );
