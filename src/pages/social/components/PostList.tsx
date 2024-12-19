@@ -29,10 +29,12 @@ const PostList = ({
 }) => {
   const [showCreatedTime, setShowCreatedTime] = useState(false);
   const showCreatedTimeHandler = () => {
-    setShowCreatedTime(true);
-    setTimeout(() => {
-      setShowCreatedTime(false);
-    }, 1500);
+    dispatch(showToast({ message: "该功能还在开发中，敬请期待！", type: "error" }));
+    // setShowCreatedTime(true);
+    // setTimeout(() => {
+    //   setShowCreatedTime(false);
+    // }, 1500);
+
   };
   const isLoggedIn = localStorage.getItem("authToken");
   const parsedLoggedIn = isLoggedIn ? JSON.parse(isLoggedIn) : null;
@@ -263,7 +265,7 @@ const PostList = ({
                 <img
                   src={post.user.avatar}
                   alt={post.user.nickname}
-                  className="w-10 h-10 rounded-full mr-4 border border-[#4A4A4A]"
+                  className="w-10 h-10 rounded-full mr-2 border border-[#4A4A4A]"
                 />
               ) : (
                 <div className="mr-2">
@@ -329,8 +331,8 @@ const PostList = ({
               )}
 
               <div>
-                <div className="flex gap-2 items-center">
-                  <h4 className="font-[500] text-[14px]">
+                <div className="flex gap-1 items-center">
+                  <h4 className="font-[500] text-[14px] truncate">
                     {post.user.nickname}
                   </h4>
                   {post?.user?.level && (
@@ -480,7 +482,7 @@ const PostList = ({
               </button>
 
               <button
-                 onClick={() => showCreatedTimeHandler()}
+                onClick={() => showCreatedTimeHandler()}
                 className="flex -mt-[2px] items-center gap-x-2"
               >
                 <svg
