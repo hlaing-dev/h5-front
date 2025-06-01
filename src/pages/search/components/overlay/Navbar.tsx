@@ -41,9 +41,22 @@ const Navbar: React.FC<NavbarProps> = ({ randomWord }) => {
   const handleSubmit = (event: any) => {
     event.preventDefault();
 
-    if (query.trim()) {
-      dispatch(setHistoryData({ data: query.trim() }));
-      navigate(`/search?query=${encodeURIComponent(query.trim())}`);
+    if (query.length > 0) {
+      if (query.trim()) {
+        dispatch(setHistoryData({ data: query.trim() }));
+        navigate(`/search?query=${encodeURIComponent(query.trim())}`);
+      }
+    } else {
+      navigate("/");
+    }
+  };
+
+  const handleCancel = (event: any) => {
+    event.preventDefault();
+    if (query.length > 0) {
+      setQuery("");
+    } else {
+      navigate("/");
     }
   };
 
@@ -56,11 +69,9 @@ const Navbar: React.FC<NavbarProps> = ({ randomWord }) => {
     }
   };
 
-  const handleRedirect = (event: any) => {
-    event.preventDefault();
+  // const handleRedirect = (event: any) => {
 
-    navigate("/");
-  };
+  // };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -120,7 +131,7 @@ const Navbar: React.FC<NavbarProps> = ({ randomWord }) => {
           </div>
         </form>
         <div className="w-[40px]">
-          <button className="search-btn" onClick={handleRedirect}>
+          <button className="search-btn" onClick={handleCancel}>
             取消
           </button>
         </div>

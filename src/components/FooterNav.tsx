@@ -58,6 +58,13 @@ const Footer: FC = () => {
   const { hideMode } = JSON.parse(
     localStorage.getItem("movieAppSettings") || "{}"
   );
+
+  const isWebClip = (): boolean => {
+    return (
+      "standalone" in window.navigator && window.navigator.standalone === true
+    );
+  };
+
   return (
     <footer
       // className={`bg-[#1f1f21] fixed  transition-all duration-300 w-full shadow-lg z-50 ${
@@ -65,7 +72,7 @@ const Footer: FC = () => {
       // }`}
       className={`bg-[#1f1f21] fixed  transition-all duration-300 w-full shadow-lg z-[200] bottom-0`}
     >
-      <div className="flex pt-4 justify-around items-center py-2">
+      <div className={`flex pt-4 ${isWebClip() && 'mb-5'} justify-around items-center py-2`}>
         {/* Home Icon */}
         <Link
           to="/"
@@ -82,7 +89,7 @@ const Footer: FC = () => {
           <span
             className={`${
               selectedMenu === "home" ? "text-white" : "text-white/80"
-            } text-[10px]`}
+            } text-[12px]`}
           >
             {t("footer.home")}
           </span>
@@ -108,7 +115,7 @@ const Footer: FC = () => {
           <span
             className={`${
               selectedMenu === "explorer" ? "text-white" : "text-white/80"
-            } text-[10px]`}
+            } text-[12px]`}
           >
             {t("footer.explorer")}
           </span>
@@ -131,7 +138,7 @@ const Footer: FC = () => {
             <span
               className={`${
                 selectedMenu === "social" ? "text-white" : "text-white/80"
-              } text-[10px]`}
+              } text-[12px]`}
             >
               广场
             </span>
@@ -154,7 +161,7 @@ const Footer: FC = () => {
           <span
             className={`${
               selectedMenu === "short" ? "text-white" : "text-white/80"
-            } text-[10px] mt-[6px]`}
+            } text-[12px] mt-[6px]`}
           >
             短剧
           </span>
@@ -178,7 +185,7 @@ const Footer: FC = () => {
           <span
             className={`${
               selectedMenu === "profile" ? "text-white" : "text-white/80"
-            } text-[10px]`}
+            } text-[12px]`}
           >
             {t("footer.profile")}
           </span>

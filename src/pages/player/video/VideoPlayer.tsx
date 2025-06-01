@@ -86,7 +86,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   (window as any).webkit.messageHandlers.jsBridge.postMessage({
                     eventName: "fullscreen",
                   });
-                  playerRef.current.pause();
                 } else {
                   playerRef.current.fullscreen = true;
                 }
@@ -100,23 +99,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         });
 
         // Use Hls.js for HLS streams
-        // if (Hls.isSupported() && videoUrl.includes(".m3u8")) {
-        //   hls = new Hls();
-        //   hls.loadSource(videoUrl);
-        //   hls.attachMedia(art.video);
+        if (Hls.isSupported() && videoUrl.includes(".m3u8")) {
+          hls = new Hls();
+          hls.loadSource(videoUrl);
+          hls.attachMedia(art.video);
 
-        //   // Handle HLS errors
-        //   hls.on(Hls.Events.ERROR, (_, data) => {
-        //     if (data.fatal) {
-        //       console.error("HLS error:", data);
-        //       // handleVideoError(videoUrl);
-        //     }
-        //   });
-        // } else {
-        //   art.video.src = videoUrl; // For Safari and iOS
-        // }
+          // Handle HLS errors
+          hls.on(Hls.Events.ERROR, (_, data) => {
+            if (data.fatal) {
+              console.error("HLS error:", data);
+              // handleVideoError(videoUrl);
+            }
+          });
+        } else {
+          art.video.src = videoUrl; // For Safari and iOS
+        }
 
-        art.video.src = videoUrl; // For Safari and iOS
+        // art.video.src = videoUrl; // For Safari and iOS
 
         // Adjust video ratio based on the video's actual dimensions
         art.once("video:loadedmetadata", () => {
@@ -202,6 +201,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [videoUrl, resumeTime]);
 
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && playerRef.current) {
@@ -214,7 +214,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
-
+  
   // Define the event handler
   const sendNativeEvent = (message: string) => {
     if (
@@ -227,18 +227,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const handleBack = async () => {
-    if (playerRef.current) {
-      // Report progress before navigating back
-      reportProgress(playerRef.current.currentTime, playerRef.current.duration);
-      playerRef.current.pause();
-      playerRef.current.video.src = ""; // Stop video requests
-      playerRef.current.destroy();
-      playerRef.current = null;
-      const token = getToken();
-      if (token) {
-        refetch();
-      }
-    }
     onBack();
   };
 
@@ -291,50 +279,46 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   return (
     <div
       id="my-player"
-      className={`relative w-full bg-black ${reHeight ? "h-[40vh]" : ""}`}
+      className={`relative w-full bg-black ${reHeight ? "h-[220px]" : ""}`}
     >
       {/* Back button */}
       {isControlsVisible && (
         <>
-          <div className="absolute top-0 left-0 right-0 flex justify-between items-center p-4 z-50">
-  {/* Left Section - Back Button & Movie Name */}
-  <button 
-    onClick={handleBack} 
-    className="text-white flex items-center flex-1 overflow-hidden gap-2 pr-4"
-  >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-    >
-      <path
-        d="M7.828 11H20V13H7.828L13.192 18.364L11.778 19.778L4 12L11.778 4.22198L13.192 5.63598L7.828 11Z"
-        fill="white"
-      />
-    </svg>
-    <p className="cus-elips">{movieDetail?.name} {selectedEpisode?.episode_name}</p>
-  </button>
-
-  {/* Right Section - PiP Button */}
-  <button className="text-white flex-shrink-0" onClick={handlePiP}>
-    <img src={floatingScreen} alt="PiP" className="h-5 w-5" />
-  </button>
-</div>
+          <div className="absolute top-0 left-0 p-4 z-50">
+            <button onClick={handleBack} className="text-white flex">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <path
+                  d="M7.828 11H20V13H7.828L13.192 18.364L11.778 19.778L4 12L11.778 4.22198L13.192 5.63598L7.828 11Z"
+                  fill="white"
+                />
+              </svg>
+              <p className="cus-elips">{selectedEpisode?.episode_name}</p>
+            </button>
+          </div>
+          <div className="absolute top-0 right-0 p-4 z-50">
+            <button className="text-white" onClick={handlePiP}>
+              <img src={floatingScreen} alt="PiP" className="h-5 w-5" />
+            </button>
+          </div>
         </>
       )}
 
       {/* Video element wrapper */}
       <div
-        className={`relative w-full ${reHeight ? "h-[40vh]" : ""}`}
+        className={`relative w-full ${reHeight ? "h-[220px]" : "h-[220px]"}`}
         style={{ paddingTop: `${videoRatio * 100}%` }}
       >
         {/* Video element */}
         <div
           ref={videoElementRef}
           className={`absolute top-0 left-0 w-full ${
-            reHeight ? "h-[40vh]" : "h-full"
+            reHeight ? "h-[220px]" : "h-full"
           }`}
         ></div>
       </div>

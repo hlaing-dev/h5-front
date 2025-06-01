@@ -5,12 +5,13 @@ import Loader from "../../../search/components/Loader";
 import ImageWithPlaceholder from "../../../search/components/ImgPlaceholder";
 import { useDeleteCollectMutation } from "../../services/profileApi"; // Import delete mutation
 import NewAds from "../../../../components/NewAds";
+import { showToast } from "../../error/ErrorSlice";
+import { useDispatch } from "react-redux";
 
 interface MainProps {
   isEditMode: boolean;
   setIsEditMode: React.Dispatch<React.SetStateAction<boolean>>;
   movies: any[];
-  advert: any;
   isLoading: boolean;
   isFetching: boolean;
   setMovies: any;
@@ -19,29 +20,28 @@ interface MainProps {
   setcurrentType: any;
   onTypeClick: any;
   currentPage: any;
-  isAdsLoading: any;
-  isAdsFetching: any;
+  refetch: any;
 }
 
 const Main: React.FC<MainProps> = ({
   currentType,
-  isAdsLoading,
-  isAdsFetching,
   currentPage,
   types,
   isEditMode,
   setIsEditMode,
   movies,
-  advert,
   isFetching,
   setMovies,
   onTypeClick,
+  refetch,
 }) => {
   const navigate = useNavigate();
   const [selectedMovies, setSelectedMovies] = useState<string[]>([]);
   const [deleteMovies, setDeleteMovies] = useState<string[]>([]);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [deleteCollect] = useDeleteCollectMutation(); // Use the delete mutation
+  const [isLoadingDelete, setIsLoadingDelete] = useState(false);
+  const dispatch = useDispatch();
 
   const handleDelete = () => {
     setShowConfirmation(true);
@@ -64,8 +64,11 @@ const Main: React.FC<MainProps> = ({
   };
 
   const confirmDelete = async () => {
+    setShowConfirmation(false);
+    setIsLoadingDelete(true);
     try {
       await deleteCollect({ ids: deleteMovies.join(",") }).unwrap(); // Call the delete mutation
+      await refetch();
       // dispatch(deleteFavData(selectedMovies));
       setMovies((prevMovies: any[]) =>
         prevMovies.filter((movie) => !selectedMovies.includes(movie.movie_id))
@@ -73,8 +76,13 @@ const Main: React.FC<MainProps> = ({
       setSelectedMovies([]);
       setIsEditMode(false);
       setShowConfirmation(false);
+      setIsLoadingDelete(false);
     } catch (error) {
-      console.error("Failed to delete favorites:", error);
+      dispatch(showToast({ message: "服务器开小差了", type: "error" }));
+      setIsLoadingDelete(false);
+      setShowConfirmation(false);
+      setSelectedMovies([]);
+      setIsEditMode(false);
     }
   };
 
@@ -85,29 +93,28 @@ const Main: React.FC<MainProps> = ({
   const handleMovieClick = (movieId: string, id: string) => {
     if (isEditMode) {
       handleDeleteSelect(id);
-      handleMovieSelect(movieId); // Select the movie when in edit mode
+      handleMovieSelect(movieId);
     } else {
       navigate(`/player/${movieId}`);
     }
   };
 
   const selectAllMovies = () => {
-    setSelectedMovies(movies?.map(x => x.movie_id) || []);
-  }
+    setSelectedMovies(movies?.map((x) => x.movie_id) || []);
+  };
 
   return (
-    <div className="bg-[#161619] pb-[50px] mt-[65px] ">
+    <div className="bg-[#161619] pb-[50px] mt-[25px] ">
       <div className="mt-3">
-        {isAdsLoading || isAdsFetching ? (
+        {/* {isAdsLoading || isAdsFetching ? (
           <div className="flex justify-center items-center h-[126px]">
             <Loader />
           </div>
         ) : (
           <>
-            {/* <Ads advert={advert} /> */}
             <NewAds section="collect_up" />
           </>
-        )}
+        )} */}
 
         <div className="flex items-center gap-2 mt-7 px-3 overflow-x-scroll max-w-full whitespace-nowrap scrollbar-hide">
           {types?.map((type: any, index: number) => (
@@ -144,9 +151,10 @@ const Main: React.FC<MainProps> = ({
                     <input
                       type="checkbox"
                       checked={selectedMovies.includes(movie.movie_id)}
-                      onChange={(e) => {
-                        e.stopPropagation();
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => {
                         handleMovieSelect(movie.movie_id);
+                        handleDeleteSelect(movie.id);
                       }}
                       className="h-5 w-5 text-[#F54100] border-2 border-gray-600 rounded-full focus:ring-0 focus:outline-none"
                     />
@@ -160,7 +168,7 @@ const Main: React.FC<MainProps> = ({
                   />
                   <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black to-transparent rounded-sm"></div>
 
-                  <div className="absolute bottom-[3px] right-[3px] text-[10px]">
+                  <div className="absolute bottom-[3px] right-[3px] text-[12px]">
                     {movie?.dynamic}
                   </div>
                 </div>
@@ -384,11 +392,15 @@ const Main: React.FC<MainProps> = ({
         >
           <button
             className="w-[50%] cancel-all"
-            onClick={() => selectedMovies && selectedMovies.length === movies?.length ? setSelectedMovies([]) : selectAllMovies()}
+            onClick={() =>
+              selectedMovies && selectedMovies.length === movies?.length
+                ? setSelectedMovies([])
+                : selectAllMovies()
+            }
           >
             {selectedMovies && selectedMovies.length === movies?.length
-                  ? "全部取消"
-                  : "选择全部"}
+              ? "全部取消"
+              : "选择全部"}
           </button>
           <button
             className="delete-all w-[50%]"
@@ -419,6 +431,11 @@ const Main: React.FC<MainProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+        )}
+        {isLoadingDelete && (
+          <div className="fixed inset-0 z-20 bg-black bg-opacity-80 flex justify-center items-center">
+            <Loader />
           </div>
         )}
       </div>

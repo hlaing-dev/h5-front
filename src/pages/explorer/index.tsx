@@ -5,6 +5,8 @@ import Tab3 from "../../components/explorer/Tab3";
 import Tab4 from "../../components/explorer/Tab4";
 import { useDispatch, useSelector } from "react-redux";
 import { setActiveNav } from "./slice/ExploreSlice";
+import FilterTag from "../../components/explorer/FilterTag";
+import NewAds from "../../components/NewAds";
 // import TopNav from "../../components/explorer/TopNav";
 // import { useGetExploreListQuery } from "./services/explorerAPi";
 
@@ -22,28 +24,7 @@ const Explorer: React.FC = () => {
     { title: "排行榜", content: <Tab4 /> },
   ];
 
-  // Scroll event listener to detect scroll direction
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > lastScrollY && window.scrollY > 100) {
-        // Scrolling down, hide the header
-        setIsHeaderVisible(false);
-      } else if (window.scrollY < lastScrollY) {
-        // Scrolling up, show the header
-        setIsHeaderVisible(true);
-      }
-      setLastScrollY(window.scrollY);
-    };
-
-    window.addEventListener("scroll", handleScroll);
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, [lastScrollY]);
-
   return (
-    // bg-[#1f1f21]
     <div className="relative">
       <nav
         // className={`flex flex-wrap gap-4 items-center py-2 px-3  bg-background fixed transition-all duration-300 w-full z-50 ${
@@ -75,7 +56,7 @@ const Explorer: React.FC = () => {
           </button>
         ))}
       </nav>
-      <div className="bg-background pt-12">
+      <div className="bg-background">
         <div className="text-white">
           {tabs[activeNav ? activeNav : activeTab]?.content}
         </div>

@@ -26,7 +26,7 @@ const MovieCard = ({
           className={`movie_img rounded-[4px] border-none  cursor-default object-cover w-full`}
         />
         <div className="absolute rounded-[4px]  h-full w-full inset-0 bg-gradient-to-b from-transparent via-black/5 to-black"></div>
-        <div className="flex absolute text-[10px] justify-between items-center px-3 bottom-2 w-full">
+        <div className="flex absolute text-[12px] justify-between items-center px-3 bottom-2 w-full">
           <p className="flex-1 truncate text-white">{movie?.dynamic}</p>
           <p className="flex-1 flex justify-end text-white">
             {movie?.type_name}
@@ -52,7 +52,7 @@ const MovieCard = ({
     <div className="text-container">
       <div className="movie-info">
         <h2
-          className={`text-[12px] mt-[.14rem] leading-[18px] font-confortFont font-[400] text-white truncate`}
+          className={`text-[14px] mt-[.14rem] leading-[18px] font-confortFont font-[400] text-white truncate`}
         >
           {he.decode(movie?.name || "Unknown Title")}
         </h2>

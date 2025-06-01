@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ImageWithPlaceholder from "../../search/components/ImgPlaceholder";
 import { setAuthModel } from "../../../features/login/ModelSlice";
@@ -27,7 +27,11 @@ const ProfileFirst = () => {
   const parsedLoggedIn = isLoggedIn ? JSON.parse(isLoggedIn) : null;
   const token = parsedLoggedIn?.data?.access_token;
 
-  const { data: userData, error } = useGetUserQuery(undefined, {
+  const {
+    data: userData,
+    error,
+    refetch,
+  } = useGetUserQuery(undefined, {
     skip: !token,
   });
 
@@ -35,15 +39,32 @@ const ProfileFirst = () => {
 
   const {
     data: favoriteMovies,
-    // isLoading: isFavoritesLoading,
-    // isFetching: isFavoritesFetching,
+    isError: favoriteError,
+    refetch: refetchList,
+    isLoading: isFavoritesLoading,
+    isFetching: isFavoritesFetching,
   } = useGetListQuery({ page: 1, type_id: 0 }, { skip: !token });
-  const { data, isLoading, isFetching, refetch } = useGetRecordQuery(
-    undefined,
-    {
-      skip: !token,
+  const {
+    data,
+    isLoading,
+    isFetching,
+    isError: recordError,
+    refetch: refetchRecord,
+  } = useGetRecordQuery(undefined, {
+    skip: !token,
+  }); // Fetch favorite movies list from API
+
+  const prevTokenRef = useRef(token);
+
+  useEffect(() => {
+    // Only trigger refetch if the token has changed
+    if (prevTokenRef.current !== token) {
+      prevTokenRef.current = token;
+      refetch();
+      refetchRecord();
+      refetchList();
     }
-  ); // Fetch favorite movies list from API
+  }, [token, refetch]);
 
   // const [movies, setMovies] = useState<Movie[]>([]);
   const dispatch = useDispatch();
@@ -122,7 +143,17 @@ const ProfileFirst = () => {
     }
   };
 
-  // console.log(latestMovies);
+  const handleMallClick = () => {
+    if (!token) {
+      // If not logged in, open the login modal
+      startTransition(() => {
+        dispatch(setAuthModel(true));
+      });
+    } else {
+      // If logged in, redirect to the favorites page
+      navigate("/point_mall");
+    }
+  };
 
   return (
     <div className="profile-div">
@@ -166,7 +197,7 @@ const ProfileFirst = () => {
         </a>
 
         {/* Horizontal Scrolling Movie List */}
-        {token && movies?.length !== 0 && (
+        {token && movies?.length !== 0 && !isFetching && !recordError && (
           <div className="flex overflow-x-scroll whitespace-nowrap watch_ten scrollbar-hide gap-4 ">
             {latestMovies?.map((movie: any) => (
               <Link
@@ -205,7 +236,9 @@ const ProfileFirst = () => {
                     }}
                   ></div>
                 </div>
-                <div className="his-text mt-1 cus-elips">{movie?.movie_name}</div>
+                <div className="his-text mt-1 cus-elips">
+                  {movie?.movie_name}
+                </div>
               </Link>
             ))}
           </div>
@@ -248,41 +281,96 @@ const ProfileFirst = () => {
         </a>
 
         {/* Horizontal Scrolling Movie List */}
-        {token && favorites?.length !== 0 && (
-          <div className="flex overflow-x-scroll whitespace-nowrap watch_ten scrollbar-hide gap-4 ">
-            {favorites?.map((movie: any) => (
-              <Link
-                to={`/player/${movie?.movie_id}`}
-                key={movie?.movie_id}
-                className="w-[114px]"
-              >
-                <div className="flex flex-col w-[114px] gap-2 transition-all duration-300 ease-in-out">
-                  <div className="relative w-[114px] transition-transform duration-500 ease-in-out transform">
-                    <ImageWithPlaceholder
-                      src={movie?.cover}
-                      alt={`Picture of ${movie?.movie_name}`}
-                      width={114}
-                      height={153}
-                      className="rounded-md w-full h-[153px] object-cover object-center"
-                    />
-                    <div className="absolute w-full bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black to-transparent rounded-sm"></div>
+        {token &&
+          favorites?.length !== 0 &&
+          !isFavoritesFetching &&
+          !favoriteError && (
+            <div className="flex overflow-x-scroll whitespace-nowrap watch_ten scrollbar-hide gap-4 ">
+              {favorites?.map((movie: any) => (
+                <Link
+                  to={`/player/${movie?.movie_id}`}
+                  key={movie?.movie_id}
+                  className="w-[114px]"
+                >
+                  <div className="flex flex-col w-[114px] gap-2 transition-all duration-300 ease-in-out">
+                    <div className="relative w-[114px] transition-transform duration-500 ease-in-out transform">
+                      <ImageWithPlaceholder
+                        src={movie?.cover}
+                        alt={`Picture of ${movie?.movie_name}`}
+                        width={114}
+                        height={153}
+                        className="rounded-md w-full h-[153px] object-cover object-center"
+                      />
+                      <div className="absolute w-full bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black to-transparent rounded-sm"></div>
 
-                    <div className="absolute bottom-[3px] right-[3px] text-[10px]">
-                      {movie?.dynamic}
+                      <div className="absolute bottom-[3px] right-[3px] text-[12px]">
+                        {movie?.dynamic}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h1 className=" truncate text-[#888] text-[14px]">
+                        {movie?.movie_name}
+                      </h1>
                     </div>
                   </div>
-
-                  <div>
-                    <h1 className=" truncate text-[#888] text-[14px]">
-                      {movie?.movie_name}
-                    </h1>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              ))}
+            </div>
+          )}
+        {/* point */}
+        <a className="p-first cursor-pointer " onClick={handleMallClick}>
+          <div className="flex gap-3 items-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="24"
+              viewBox="0 0 18 24"
+              fill="none"
+            >
+              <path
+                d="M1.23474 15.4848C1.23474 11.1972 4.7125 7.71948 9.00002 7.71948C13.2875 7.71948 16.7653 11.1972 16.7653 15.4848C16.7653 19.7723 13.2875 23.25 9.00002 23.25C4.7125 23.25 1.23474 19.7723 1.23474 15.4848Z"
+                stroke="#A3A3A4"
+                stroke-width="1.5"
+              />
+              <path
+                d="M9.76309 14.219C9.87963 14.4552 10.105 14.6189 10.3656 14.6567L12.0725 14.9044L10.8384 16.1093C10.6502 16.293 10.5644 16.5573 10.6086 16.8165L10.8991 18.5162L9.37275 17.7125C9.13945 17.5896 8.8606 17.5896 8.6273 17.7125L7.10099 18.5162L7.3914 16.8165C7.43568 16.5573 7.34981 16.293 7.16169 16.1093L5.92755 14.9044L7.63444 14.6567C7.89508 14.6189 8.12041 14.4552 8.23696 14.219L9.00002 12.6726L9.76309 14.219ZM12.3623 14.6216L12.3621 14.6217L12.3623 14.6216Z"
+                stroke="#A3A3A4"
+              />
+              <path
+                d="M4.76176 6.58111L2.34555 0.6H6.71289L7.94859 3.6624L7.08215 5.81033C6.26918 5.97126 5.49008 6.23233 4.76176 6.58111Z"
+                stroke="#A3A3A4"
+                stroke-width="1.2"
+              />
+              <path
+                d="M15.6512 0.6L13.2377 6.58175C12.0288 6.00354 10.6818 5.66211 9.26218 5.62456L11.2909 0.6H15.6512Z"
+                stroke="#A3A3A4"
+                stroke-width="1.2"
+              />
+            </svg>
+            <div className="profile-text">积分商城</div>
           </div>
-        )}
-
+          <div className="flex gap-1 items-center">
+            <div className="text-[12px] text-[#d0bc94]">
+              积分兑换价值百元大礼包
+            </div>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <g opacity="0.2">
+                <path
+                  d="M13.1722 12L8.22217 7.04999L9.63617 5.63599L16.0002 12L9.63617 18.364L8.22217 16.95L13.1722 12Z"
+                  fill="white"
+                />
+              </g>
+            </svg>
+          </div>
+        </a>
+        {/* invite */}
         <a className="p-first cursor-pointer" onClick={handleInviteClick}>
           <div className="flex gap-3 items-center">
             <svg

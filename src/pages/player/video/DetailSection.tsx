@@ -1,17 +1,18 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import share from "../../../assets/share.png";
 import star from "../../../assets/star.png";
 import info from "../../../assets/info.png";
 import shareLink from "../../../assets/shareLink.png";
 import selectedStar from "../../../assets/selectedStar.png";
 import rate from "../../../assets/rate.svg";
+import icon from "../../../assets/logo.svg";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChevronRight,
   faTimes,
   faFire,
 } from "@fortawesome/free-solid-svg-icons";
-import Cookies from 'js-cookie';
+import Cookies from "js-cookie";
 import CommentComponent from "./CommentSection";
 import { useDispatch } from "react-redux";
 import { setAuthModel } from "../../../features/login/ModelSlice";
@@ -21,6 +22,7 @@ import { DetailSectionProps } from "../../../model/videoModel";
 import { useGetListQuery } from "../../../pages/profile/services/profileApi";
 import NewAds from "../../../components/NewAds";
 import Fire from "../../../assets/Fire.png";
+import copy from "copy-to-clipboard";
 import {
   convertToSecurePayload,
   convertToSecureUrl,
@@ -48,7 +50,7 @@ const DetailSection: React.FC<DetailSectionProps> = ({
   const { refetch } = useGetListQuery({ page: 1, type_id: 0 });
   const [showFeedbackModal, setShowFeedbackModal] = useState(false); // For triggering modal
   const [visible, setVisible] = useState(false);
-  const [lowerDivHeight, setLowerDivHeight] = useState(0);
+
   const modalRef = useRef<any>(null);
 
   const handleCopy = () => {
@@ -56,9 +58,9 @@ const DetailSection: React.FC<DetailSectionProps> = ({
     setTimeout(() => setVisible(false), 2000); // Hide after 2 seconds
   };
 
-  const handleDetailClick = () => {
-    setShowModal(true);
-  };
+  // const handleDetailClick = () => {
+  //   setShowModal(true);
+  // };
 
   const handleCloseModal = () => {
     setShowModal(false);
@@ -119,29 +121,15 @@ const DetailSection: React.FC<DetailSectionProps> = ({
 
   const copyToClipboard = async (text: string) => {
     try {
-      handleCopy();
-      // sendEventToNative(text);
-      // Attempt to use the Clipboard API (works in most modern browsers)
-      if ('clipboard' in navigator) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const input = document.createElement('input');
-        input.setAttribute('value', text); // Set the value to the text we want to copy
-        input.setAttribute('readonly', '');  // Make it readonly so user can't modify it
-        input.style.position = 'absolute';  // Ensure it doesn't affect layout
-        input.style.opacity = '0';          // Make it invisible
-        input.style.pointerEvents = 'none'; // Disable interaction
-        input.style.zIndex = '-9999';       // Position it off-screen
-
-        document.body.appendChild(input);  // Append it to the body
-        input.select();  // Select the text
-        document.execCommand('copy');  // Copy the selected text to clipboard
-        document.body.removeChild(input); // Remove the input from the DOM
+      if (isWebView()) {
+        sendEventToNative(text);
       }
+      handleCopy();
+      copy(text);
     } catch (error) {
       console.error("Clipboard copy failed", error);
     }
-  }
+  };
 
   const sendEventToNative = (text: string) => {
     if (
@@ -151,63 +139,71 @@ const DetailSection: React.FC<DetailSectionProps> = ({
     ) {
       (window as any).webkit.messageHandlers.jsBridge.postMessage({
         eventName: "movieDetailShare",
-        value: text
-    });
-  }
-  }
-
-const handleShare = async () => {
-  setIsLoading(true);
-  const cookieKey = 'shareContent';
-  
-  try {
-    // Check if the cookie exists
-    const cachedContent = Cookies.get(cookieKey);
-    if (cachedContent) {
-      copyToClipboard(JSON.parse(cachedContent).data.link);
-      sendShareEventToNative(JSON.parse(cachedContent).data.link);
-      return;
+        value: text,
+      });
     }
+  };
 
-    // Call the API if no cached content is found
-    const response = await axios.get(
-      convertToSecureUrl(`${process.env.REACT_APP_API_URL}/user/get_share`),
-      {
-        headers: {
-          "Content-Type": "application/json",
-        }
-      }
+  function isWebView() {
+    return (
+      (window as any).webkit &&
+      (window as any).webkit.messageHandlers &&
+      (window as any).webkit.messageHandlers.jsBridge
     );
+  }
 
-    const data = await response.data;
-    const result: any = await decryptWithAes(data);
+  const handleShare = async () => {
+    setIsLoading(true);
+    const cookieKey = "shareContent";
 
-    if (data && result) {
-      // Save to cookie with a 2-hour expiry
-      Cookies.set(cookieKey, JSON.stringify(result), { expires: 1 / 12 }); // 1/12 day = 2 hours
-      sendShareEventToNative(result?.data.link);
-      copyToClipboard(result?.data.link);
+    try {
+      // Check if the cookie exists
+      const cachedContent = Cookies.get(cookieKey);
+      if (cachedContent) {
+        copyToClipboard(JSON.parse(cachedContent).data.content);
+        sendShareEventToNative(JSON.parse(cachedContent).data.content);
+        return;
+      }
+
+      // Call the API if no cached content is found
+      const response = await axios.get(
+        convertToSecureUrl(`${process.env.REACT_APP_API_URL}/user/get_share`),
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.data;
+      const result: any = await decryptWithAes(data);
+
+      if (data && result) {
+        // Save to cookie with a 2-hour expiry
+        Cookies.set(cookieKey, JSON.stringify(result), { expires: 1 / 12 }); // 1/12 day = 2 hours
+        sendShareEventToNative(result?.data.content);
+        copyToClipboard(result?.data.content);
+      }
+    } catch (error) {
+      console.error("Error fetching share content:", error);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error("Error fetching share content:", error);
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
-const sendShareEventToNative = (value: any) => {
-  // copyToClipboard("https://d1svxjht0opoc5.cloudfront.net/kkoor4.pdf");
-  if (
-    (window as any).webkit &&
-    (window as any).webkit.messageHandlers &&
-    (window as any).webkit.messageHandlers.jsBridge
-  ) {
-    (window as any).webkit.messageHandlers.jsBridge.postMessage({
-      eventName: "socialMediaShare",
-      value: value,
-    });
-  }
-};
+  const sendShareEventToNative = (value: any) => {
+    // copyToClipboard("https://d1svxjht0opoc5.cloudfront.net/kkoor4.pdf");
+    if (
+      (window as any).webkit &&
+      (window as any).webkit.messageHandlers &&
+      (window as any).webkit.messageHandlers.jsBridge
+    ) {
+      (window as any).webkit.messageHandlers.jsBridge.postMessage({
+        eventName: "socialMediaShare",
+        value: value,
+      });
+    }
+  };
 
   const customHeight = () => {
     const upperDiv = document.getElementById("upper-div");
@@ -216,24 +212,66 @@ const sendShareEventToNative = (value: any) => {
     return remainingHeight;
   };
 
+  const lowerDivHeightRef = useRef(customHeight());
+
+  // This won't trigger re-renders
+  const updateHeight = useCallback(() => {
+    const newHeight = customHeight();
+    lowerDivHeightRef.current = newHeight;
+
+    // Directly apply to modal if it's open
+    if (modalRef.current && showModal) {
+      modalRef.current.style.height = `${newHeight}px`;
+    }
+  }, [showModal]);
+
   useEffect(() => {
-    const updateHeight = () => {
-      setLowerDivHeight(customHeight());
+    // Initial height calculation
+    updateHeight();
+
+    // Throttled resize handler
+    let ticking = false;
+    const handleResize = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          updateHeight();
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
 
-    updateHeight(); // Set initial height
-    window.addEventListener("resize", updateHeight); // Update height on window resize
+    window.addEventListener("resize", handleResize, { passive: true });
+    return () => window.removeEventListener("resize", handleResize);
+  }, [updateHeight]);
 
-    return () => {
-      window.removeEventListener("resize", updateHeight); // Cleanup event listener
-    };
-  }, []);
+  const handleDetailClick = () => {
+    setShowModal(true);
+    // Apply current height directly
+    if (modalRef.current) {
+      modalRef.current.style.height = `${lowerDivHeightRef.current}px`;
+    }
+  };
 
-  useEffect(() => {
-    setTimeout(() => {
-      window.scrollTo(0, 0);
-    }, 200);
-  }, []);
+  // useEffect(() => {
+  //   const updateHeight = () => {
+  //     setLowerDivHeight(customHeight());
+  //   };
+
+  //   updateHeight(); // Set initial height
+  //   window.addEventListener("resize", updateHeight); // Update height on window resize
+
+  //   return () => {
+  //     window.removeEventListener("resize", updateHeight); // Cleanup event listener
+  //   };
+  // }, []);
+
+  // useEffect(() => {
+  //   setTimeout(() => {
+  //     console.log("scroll to top");
+  //     window.scrollTo(0, 0);
+  //   }, 200);
+  // }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: any) => {
@@ -247,13 +285,13 @@ const sendShareEventToNative = (value: any) => {
     };
   }, [modalRef]);
 
-  useEffect(()=>{
-    if (activeTab === "tab-1") {
-      setTimeout(() => {
-        window.scrollTo(0, 0);
-      }, 200);
-    }
-  },[activeTab]);
+  // useEffect(() => {
+  //   if (activeTab === "tab-1") {
+  //     setTimeout(() => {
+  //       window.scrollTo(0, 0);
+  //     }, 200);
+  //   }
+  // }, [activeTab]);
 
   return (
     <div className="flex flex-col w-full bg-background">
@@ -269,7 +307,8 @@ const sendShareEventToNative = (value: any) => {
           <div id="tab-1" className="block">
             {/* Movie Title and Info */}
             <div className="movie-info mb-4 flex-auto overflow-x-scroll">
-              <h2 className="text-[16px] font-semibold text-white">
+              {/* text-[16px] remove */}
+              <h2 className="text-[18px] font-semibold text-white">
                 {movieDetail.name || "暂无标题"}
               </h2>
               <div className="info text-white/40 text-sm flex justify-between items-start overflow-x-auto space-x-2 mt-2">
@@ -358,7 +397,15 @@ const sendShareEventToNative = (value: any) => {
         )}
 
         {visible && (
-            <img src={shareLink} alt="" className="w-32 h-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"/>
+          <div className="flex justify-center items-center ">
+            <div
+              className={`text-[12px] fixed w-fit  top-1/2 mx-auto left-0 right-0  py-3 px-5  flex items-center justify-center gap-1 rounded-full toast  text-white text-center z-[9999999999999999999]`}
+            >
+              <img src={icon} className="w-6 h-6" alt="" />
+              <p className=" text-[13px]">链接已复制 </p>
+            </div>
+          </div>
+          // <img src={shareLink} alt="" className="w-32 h-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"/>
         )}
 
         {activeTab === "tab-2" ? (
@@ -366,7 +413,7 @@ const sendShareEventToNative = (value: any) => {
             {/* Comment section or other content */}
             <CommentComponent
               movieId={id}
-              lowerDivHeight={lowerDivHeight}
+              lowerDivHeight={lowerDivHeightRef.current}
               setCommentCount={setCommentCount}
               commentCount={commentCount}
               comments={comments}
@@ -389,7 +436,7 @@ const sendShareEventToNative = (value: any) => {
           <div
             ref={modalRef}
             className="bg-background backdrop-blur-md w-full max-w-md bottom-0 rounded-lg p-6 text-white overflow-y-auto"
-            style={{ height: `${lowerDivHeight}px` }}
+            style={{ height: `${lowerDivHeightRef.current}px` }}
           >
             {/* Modal Header */}
             <div className="flex justify-between items-center mb-4">
@@ -478,7 +525,7 @@ const sendShareEventToNative = (value: any) => {
           onClose={handleFeedbackModel}
           setIsLoading={setIsLoading}
           isLoading={isLoading}
-          height={`${lowerDivHeight}px`}
+          height={`${lowerDivHeightRef?.current}px`}
         />
       )}
     </div>

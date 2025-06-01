@@ -9,6 +9,7 @@ import Header from "./components/Header";
 import FooterNav from "./components/FooterNav";
 import { useDispatch, useSelector } from "react-redux";
 import LoginEmail from "./components/login/LoginEmail";
+import UpdateNotification from "./components/UpdateNotification";
 
 import {
   setAuthModel,
@@ -34,11 +35,18 @@ import Social from "./pages/social";
 import Short from "./pages/short";
 import { useGetRecommendedMoviesQuery } from "./pages/home/services/homeApi";
 import Announce from "./components/Announce";
+import land from './assets/login/land.webp'
+// import { Game } from "./pages/Point/pages/Game";
 // import Menber from "./pages/share/member";
 // import Share from "./pages/share";
 
 // Lazy load the pages
 const Home = React.lazy(() => import("./pages/home"));
+const Game = React.lazy(() => import("./pages/Point/pages/Game"));
+const Mall = React.lazy(() => import("./pages/Point/pages/Mall"));
+const List = React.lazy(() => import("./pages/Point/pages/List"));
+const Shop = React.lazy(() => import("./pages/Point/pages/Shop"));
+const ItemDetail = React.lazy(() => import("./pages/Point/pages/ItemDetail"));
 const Search = React.lazy(() => import("./pages/search"));
 const Main = React.lazy(() => import("./pages/search/Main"));
 const Explorer = React.lazy(() => import("./pages/explorer"));
@@ -61,6 +69,7 @@ const Invite = React.lazy(() => import("./pages/profile/Invite"));
 const Share = React.lazy(() => import("./pages/share"));
 const Member = React.lazy(() => import("./pages/share/member"));
 const Point = React.lazy(() => import("./pages/Point"));
+const ItemInfo = React.lazy(() => import("./pages/Point/pages/ItemInfo"));
 
 // ProtectedRoute component to handle route guarding
 // const ProtectedRoute: React.FC<{ children: JSX.Element }> = ({ children }) => {
@@ -84,6 +93,44 @@ const App: React.FC = () => {
   // const { data: notiData, isLoading: notiLoading } = useGetNotificationQuery();
 
   const [showNotice, setShowNotice] = useState(false);
+  const [preloadedImage, setPreloadedImage] = useState<string | null>(null);
+  const [showUpdateNotification, setShowUpdateNotification] = useState(false);
+
+  // Preload landing image
+  useEffect(() => {
+    if (data?.data) {
+      const startAds = data?.data["start"];
+      if (startAds && startAds.length > 0 && startAds[0]?.data?.image) {
+        // Immediately start fetching the image as a blob
+        fetch(startAds[0]?.data?.image)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('Network response was not ok');
+            }
+            return response.blob();
+          })
+          .then(blob => {
+            const url = URL.createObjectURL(blob);
+            setPreloadedImage(url);
+            
+            // Also preload the image in browser cache
+            const img = new Image();
+            img.src = url;
+          })
+          .catch(err => {
+            console.error("Failed to preload image:", err);
+            // Continue without preloaded image
+          });
+      }
+    }
+    
+    // Clean up any blob URLs when component unmounts
+    return () => {
+      if (preloadedImage) {
+        URL.revokeObjectURL(preloadedImage);
+      }
+    };
+  }, [data]);
 
   // Combined loading state
   // const isLoading = moviesLoading || topicsLoading || notiLoading;
@@ -144,7 +191,12 @@ const App: React.FC = () => {
     location.pathname.startsWith("/share") ||
     location.pathname.startsWith("/invite") ||
     location.pathname.startsWith("/share/member") ||
-    location.pathname.startsWith("/point_info");
+    location.pathname.startsWith("/point_info") ||
+    location.pathname.startsWith("/game") ||
+    location.pathname.startsWith("/point_mall") ||
+    location.pathname.startsWith("/list") ||
+    location.pathname.startsWith("/itemDetail") ||
+    location.pathname.startsWith("/shop");
 
   const hideHeader = location.pathname.startsWith("/explorer");
   const { hideMode } = JSON.parse(
@@ -184,7 +236,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (location.pathname !== "/") {
-      refetchAds();
+      // refetchAds();
       refetch();
     }
   }, [location.pathname]);
@@ -196,6 +248,16 @@ const App: React.FC = () => {
       dispatch(setPanding(true));
     }
   }, [dispatch]);
+
+  // Show update notification after ads screen
+  useEffect(() => {
+    if (!panding) {
+      const hasSeenUpdateNotification = sessionStorage.getItem("hasSeenUpdateNotification");
+      if (!hasSeenUpdateNotification) {
+        setShowUpdateNotification(true);
+      }
+    }
+  }, [panding]);
 
   useEffect(() => {
     if (openAuthModel || openLoginModel || openSignupModel) {
@@ -229,11 +291,35 @@ const App: React.FC = () => {
     });
   };
 
+  const handleUpdateClick = () => {
+    const link = headerData?.data?.app_store_link;
+    // Handle update action here
+    window.open(link, '_blank');
+    // Or any other update logic
+    setShowUpdateNotification(false);
+    sessionStorage.setItem("hasSeenUpdateNotification", "true");
+  };
+
+  const handleCloseUpdateNotification = () => {
+    setShowUpdateNotification(false);
+    sessionStorage.setItem("hasSeenUpdateNotification", "true");
+  };
+
   if (!data?.data) {
     return (
-      <div className="flex justify-center items-center h-screen bg-[#161619]">
-        <Loader />
-      </div>
+      <img
+        className="h-screen w-screen object-cover"
+        src={land}
+        alt=""
+      />
+    );
+  }
+
+  function isWebView() {
+    return (
+      (window as any).webkit &&
+      (window as any).webkit.messageHandlers &&
+      (window as any).webkit.messageHandlers.jsBridge
     );
   }
 
@@ -242,7 +328,7 @@ const App: React.FC = () => {
       {data?.data && (
         <>
           {panding ? (
-            <Landing data={data} />
+            <Landing data={data} preloadedImage={preloadedImage} />
           ) : (
             <div
               className={`flex flex-col min-h-screen ${
@@ -252,7 +338,22 @@ const App: React.FC = () => {
               {/* <BannerAds /> */}
               {/* Conditionally render Header */}
               {!hideHeaderFooter && !hideHeader && <Header />}
-              {showNotice && <Announce setShowNotice={setShowNotice} config={headerData} showNotice={showNotice}/>}
+              {showNotice && (
+                <Announce
+                  setShowNotice={setShowNotice}
+                  config={headerData}
+                  showNotice={showNotice}
+                />
+              )}
+
+              {showUpdateNotification && !showNotice && !isWebView() && headerData?.data?.app_store_link && (
+                <div className="fixed bottom-24 left-0 right-0 z-[9999] flex justify-center">
+                  <UpdateNotification 
+                    onUpdate={handleUpdateClick} 
+                    onClose={handleCloseUpdateNotification}
+                  />
+                </div>
+              )}
 
               <div className="flex-grow">
                 <Suspense
@@ -266,6 +367,13 @@ const App: React.FC = () => {
                     <Route path="/" element={<Home />} />
                     <Route path="/home" element={<Home />} />
                     <Route path="/search" element={<Main />} />
+                    <Route path="/game" element={<Game />} />
+                    <Route path="/point_mall" element={<Mall />} />
+                    <Route path="/list" element={<List />} />
+                    <Route path="/list" element={<List />} />
+                    <Route path="/itemDetail/:id" element={<ItemDetail />} />
+                    <Route path="/info/:id" element={<ItemInfo />} />
+                    <Route path="/shop/:id" element={<Shop />} />
                     <Route path="/search_overlay" element={<Search />} />
 
                     <Route path="/explorer" element={<Explorer />} />
@@ -276,7 +384,7 @@ const App: React.FC = () => {
                       <Route path="/social" element={<div />} />
                     )}
                     {/* <Route path="/social" element={<Social />} /> */}
-                    <Route path="/short" element={<Short />} />
+                    {/* <Route path="/short" element={<Short />} /> */}
                     <Route path="/explorer/:id" element={<Detail />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/player/:id" element={<Player />} />
@@ -298,6 +406,7 @@ const App: React.FC = () => {
                     <Route path="/invite" element={<Invite />} />
                     <Route path="/share/member" element={<Member />} />
                     <Route path="/point_info" element={<Point />} />
+                    <Route path="/point_info_redeem" element={<Point showTab={false}/>} />
                   </Routes>
                 </Suspense>
                 <ErrorToast />
@@ -338,3 +447,4 @@ const AppWithRouter = () => (
 );
 
 export default AppWithRouter;
+

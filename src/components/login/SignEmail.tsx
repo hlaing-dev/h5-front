@@ -11,12 +11,16 @@ import {
   setAuthModel,
   setCaptchaOpen,
   setLoginOpen,
+  setOtpOpen,
   setSignupOpen,
 } from "../../features/login/ModelSlice";
 import axios from "axios";
 import UserName from "./UserName";
 import "../../pages/login/login.css";
 import { useLocation } from "react-router-dom";
+import { getOtp } from "../../services/userService";
+
+import { showToast } from "../../pages/profile/error/ErrorSlice";
 
 interface SignEmailProps {
   handleBack2: () => void; // Accept handleBack as a prop
@@ -25,8 +29,13 @@ interface SignEmailProps {
 const SignEmail: React.FC<SignEmailProps> = ({ handleBack2 }) => {
   const dispatch = useDispatch();
   const [key, setKey] = useState("");
-  const { openCaptcha, openOtp, openSignUpEmailModel, openUserNameForm } =
-    useSelector((state: any) => state.model);
+  const {
+    openCaptcha,
+    openOtp,
+    openSignUpEmailModel,
+    openUserNameForm,
+    GraphicKey,
+  } = useSelector((state: any) => state.model);
   const [showOtp, setShowOtp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -35,6 +44,8 @@ const SignEmail: React.FC<SignEmailProps> = ({ handleBack2 }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [isFocusedEmail, setIsFocusedEmail] = useState(false);
   const [isFocusedPassword, setIsFocusedPassword] = useState(false);
+  const [box, setBox] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
 
   const currentLocation = useLocation(); // Use the `useLocation` hook from react-router-dom
   const previousPathname = useRef(currentLocation.pathname);
@@ -59,10 +70,9 @@ const SignEmail: React.FC<SignEmailProps> = ({ handleBack2 }) => {
     setShowPassword(!showPassword);
   };
 
-
   // Password validation function
   const validatePassword = (password: string) => {
-    const lengthValid = password.length >= 8 && password.length <= 25;
+    const lengthValid = password.length >= 6 && password.length <= 25;
     const containsLetters = /[a-zA-Z]/.test(password);
     const containsNumbers = /\d/.test(password);
     return lengthValid && containsLetters && containsNumbers;
@@ -100,11 +110,41 @@ const SignEmail: React.FC<SignEmailProps> = ({ handleBack2 }) => {
   const handleClose = () => {
     setIsVisible(false);
   };
+
+  useEffect(() => {
+    const fetchOtp = async () => {
+      try {
+        if (email) {
+          await getOtp(GraphicKey, email, "email");
+          setBox(true);
+          dispatch(setOtpOpen(false));
+        }
+      } catch (error: any) {
+        // console.error("Error fetching OTP:", error);
+        const msg = error.response.data.msg;
+        dispatch(showToast({ message: msg, type: "error" }));
+        dispatch(setOtpOpen(false));
+
+        // Show error message to the user, e.g., using state or toast notification
+      }
+    };
+
+    if (openOtp) {
+      fetchOtp();
+    }
+  }, [openOtp]);
+
   // console.log(key);
   return (
     <>
-      {openOtp && (
-        <Opt key={key} setIsVisible={setIsVisible} password={password} email={email} />
+      {box && (
+        <Opt
+          setIsVisible={setIsVisible}
+          password={password}
+          email={email}
+          setBox={setBox}
+          invite_code={inviteCode}
+        />
       )}
       <div className="min-h-screen flex items-center justify-center overflow-hidde fixed z-[99999]">
         {openCaptcha && (
@@ -122,7 +162,7 @@ const SignEmail: React.FC<SignEmailProps> = ({ handleBack2 }) => {
         <AnimatePresence>
           {isVisible && (
             <motion.div
-              className="login_box h-[480px] fixed bottom-0 z-[9999] w-screen py-4 px-[20px] bg-gray-800 rounded-t-2xl"
+              className="login_box h-[580px] fixed bottom-0 z-[9999] w-screen py-4 px-[20px] bg-gray-800 rounded-t-2xl"
               initial="hidden"
               animate="visible"
               exit="exit"
@@ -171,7 +211,7 @@ const SignEmail: React.FC<SignEmailProps> = ({ handleBack2 }) => {
                       htmlFor="email"
                       className={`absolute text-[14px] left-4 text-gray-500 transition-all duration-300 pointer-events-none ${
                         isFocusedEmail || email
-                          ? "top-[-8px] text-xs text-blue-500"
+                          ? "top-[-8px] text-[12px] text-blue-500"
                           : "top-1/2 transform -translate-y-1/2"
                       }`}
                     >
@@ -189,12 +229,14 @@ const SignEmail: React.FC<SignEmailProps> = ({ handleBack2 }) => {
                       className="w-full px- py-2 bg-[#2B2B2D] input_border focus:outline-none text-white placeholder-[#5B5B5B]"
                       required
                       placeholder="设置您的密码"
+                      minLength={6}
+                      maxLength={25}
                     />
                     {/* <label
                       htmlFor="password"
                       className={`absolute text-[14px] left-4 transition-all text-[#5B5B5B] pointer-events-none ${
                         isFocusedPassword || password
-                          ? "top-0 text-xs text-blue-500 -translate-y-full"
+                          ? "top-0 text-[12px] text-blue-500 -translate-y-full"
                           : "top-1/2 -translate-y-1/2"
                       }`}
                     >
@@ -219,9 +261,21 @@ const SignEmail: React.FC<SignEmailProps> = ({ handleBack2 }) => {
                         : "text-[#888]"
                     }  `}
                   >
-                    <p>8-25个字符</p>
+                    <p>6-25个字符</p>
                     <p>必须是以下两者中的至少两种组合：字母，数字</p>{" "}
                     {/* <p>letters, numbers.</p> */}
+                  </div>
+
+                  {/* invite_code */}
+
+                  <div className="invite_code w-full flex justify-center items-center py-[14px]">
+                    <input
+                      type="text"
+                      value={inviteCode}
+                      onChange={(e) => setInviteCode(e.target.value)}
+                      className="w-[150px] bg-transparent focus:outline-none text-white placeholder-[#5B5B5B]"
+                      placeholder="输入促销代码（可选）"
+                    />
                   </div>
 
                   <button

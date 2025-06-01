@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ImageWithPlaceholder from "./socialImgPlaceholder";
 import CustomLightbox from "./CustomLightBox";
 import Player from "./Player";
@@ -29,13 +29,20 @@ const Social_details: React.FC<any> = ({
   const [hasMore, setHasMore] = useState(true);
   const [list, setList] = useState<any[]>([]);
   const { isShowingDetails } = useSelector((state: any) => state.model);
-  console.log(isShowingDetails);
+  // console.log(isShowingDetails);
   const dispatch = useDispatch();
+  let videoData = useRef<HTMLVideoElement[]>([]);
 
-  const { data, isFetching, refetch } = useGetCommentListQuery({
+  const { data, isFetching, refetch, isLoading } = useGetCommentListQuery({
     post_id: post.post_id,
     page,
   });
+
+  useEffect(() => {
+    if (isShowingDetails) {
+      refetch();
+    }
+  }, [isShowingDetails, refetch]);
 
   useEffect(() => {
     dispatch(setShowingDetail(true));
@@ -75,7 +82,10 @@ const Social_details: React.FC<any> = ({
   const handleBackSocial = () => {
     setShowDetail(false);
     dispatch(setShowingDetail(false));
+    setList([]);
   };
+
+  console.log(" this is mf =>", isLoading);
   return (
     <div
       className="inset-0 px-[10px] fixed w-screen top-0 h-screen bg-background overflow-y-scroll z-[99999]"
@@ -270,6 +280,7 @@ const Social_details: React.FC<any> = ({
           )}
           {post.file_type === "video" && (
             <Player
+              videoData={videoData}
               isCenterPlay={false}
               src={post?.files[0].resourceURL}
               thumbnail={post?.files[0].thumbnail}
@@ -286,7 +297,7 @@ const Social_details: React.FC<any> = ({
           )}
         </div>
         {/* status */}
-        <div className="flex bg-[#161619] justify-between items-center px-[10px] py-3 text-xs">
+        <div className="flex bg-[#161619] justify-between items-center px-[10px] py-3 text-[12px]">
           {showCreatedTime ? (
             <div className="fixed top-0 left-0 flex h-screen items-center justify-center z-[1000] w-full">
               <p className="text-[12px] text-white font-semibold bg-gradient-to-r from-background to-gray-800 px-3 py-1 rounded-md">
@@ -298,7 +309,7 @@ const Social_details: React.FC<any> = ({
           )}
 
           <div>
-            <p className="text-gray-400 text-xs">{post?.create_time}</p>
+            <p className="text-gray-400 text-[12px]">{post?.create_time}</p>
           </div>
           <div className="flex gap-x-5  items-center justify-center">
             <button
@@ -376,35 +387,44 @@ const Social_details: React.FC<any> = ({
             </button>
           </div>
         </div>
-        <div className=" h-[4px] bg-black w-full"></div>
-        {/* comment */}
-        <Comment
-          setList={setList}
-          post_id={post.post_id}
-          list={list}
-          isFetching={hasMore}
-        />
+        {isFetching || isLoading ? (
+          <div className="flex bg-background justify-center items-center w-full py-[100px]">
+            <Loader />
+          </div>
+        ) : (
+          <>
+            <div className=" h-[4px] bg-black w-full"></div>
+            {/* comment */}
+            <Comment
+              setList={setList}
+              post_id={post.post_id}
+              list={list}
+              isFetching={hasMore}
+              isLoading={isLoading}
+            />
 
-        <InfiniteScroll
-          // className=" h-[100px]"
-          dataLength={list.length}
-          next={fetchMoreDataCmt}
-          hasMore={hasMore}
-          loader={
-            <div className="flex bg-background justify-center items-center w-full pb-32">
-              <Loader />
-            </div>
-          }
-          endMessage={
-            <div className="flex bg-background justify-center items-center w-full pb-32">
-              <p style={{ textAlign: "center" }}>
-                <b className=" hidden text-white/60">没有更多评论</b>
-              </p>
-            </div>
-          }
-        >
-          <></>
-        </InfiniteScroll>
+            <InfiniteScroll
+              // className=" h-[100px]"
+              dataLength={list.length}
+              next={fetchMoreDataCmt}
+              hasMore={hasMore}
+              loader={
+                <div className="flex bg-background justify-center items-center w-full pb-32">
+                  <Loader />
+                </div>
+              }
+              endMessage={
+                <div className="flex bg-background justify-center items-center w-full pb-32">
+                  <p style={{ textAlign: "center" }}>
+                    <b className=" hidden text-white/60">没有更多评论</b>
+                  </p>
+                </div>
+              }
+            >
+              <></>
+            </InfiniteScroll>
+          </>
+        )}
       </div>
     </div>
   );

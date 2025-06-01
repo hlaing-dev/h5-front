@@ -1,6 +1,7 @@
 import Loader from "../../../pages/search/components/Loader";
 
 import ImageWithPlaceholder from "./socialImgPlaceholder";
+import ImageWithPlaceholder1 from "./gifPlaceholder";
 import InfiniteScroll from "react-infinite-scroll-component";
 
 import {
@@ -18,8 +19,18 @@ import Player from "./Player";
 import Social_details from "./Social_details";
 import { useNavigate } from "react-router";
 import AudioPlayer from "./AudioPlayer";
+import {
+  useGetShareQuery,
+  useGetShareScanQuery,
+} from "../../../features/share/ShareApi";
+import Cookies from "js-cookie";
+import axios from "axios";
+import { convertToSecureUrl } from "../../../services/newEncryption";
+import { decryptWithAes } from "../../../services/newEncryption";
+import copy from "copy-to-clipboard";
 
 const PostList = ({
+  isRefreshing,
   data,
   loading,
   hasMore,
@@ -27,6 +38,7 @@ const PostList = ({
   setShowDetail,
   showDetail,
 }: {
+  isRefreshing: any;
   data: any;
   loading: boolean;
   hasMore: boolean;
@@ -63,7 +75,9 @@ const PostList = ({
   const [lightboxStates, setLightboxStates] = useState<{
     [key: string]: { isOpen: boolean; currentIndex: number };
   }>({});
+  let videoData = useRef<HTMLVideoElement[]>([]);
   const dispatch = useDispatch();
+  // const { data: newData } = useGetShareQuery({});
 
   useEffect(() => {
     const newFollowStatus: { [key: string]: boolean } = {};
@@ -112,6 +126,13 @@ const PostList = ({
     );
   }
 
+  if (isRefreshing) {
+    return (
+      <div className="text-center -mt-[100px] max-sm:h-[80vh]  h-[100vh] flex justify-center items-center">
+        <Loader />
+      </div>
+    );
+  }
   if (!data.length) {
     return (
       <div className="text-center -mt-[100px]  max-sm:h-[80vh]  h-[100vh] flex justify-center items-center">
@@ -255,8 +276,7 @@ const PostList = ({
   //     }
   //   };
 
-  const sendEventToNative = () => {
-    copyToClipboard("https://d1svxjht0opoc5.cloudfront.net/kkoor4.pdf");
+  const sendEventToNative = ({ value }: { value: any }) => {
     if (
       (window as any).webkit &&
       (window as any).webkit.messageHandlers &&
@@ -264,30 +284,51 @@ const PostList = ({
     ) {
       (window as any).webkit.messageHandlers.jsBridge.postMessage({
         eventName: "socialMediaShare",
-        value: "https://d1svxjht0opoc5.cloudfront.net/kkoor4.pdf",
+        value: value,
       });
+    }
+  };
+
+  const handleShare = async () => {
+    const cookieKey = "shareContent";
+
+    try {
+      // Check if the cookie exists
+      const cachedContent = Cookies.get(cookieKey);
+      if (cachedContent) {
+        copyToClipboard(JSON.parse(cachedContent).data.content);
+        sendEventToNative(JSON.parse(cachedContent).data.content);
+        return;
+      }
+
+      // Call the API if no cached content is found
+      const response = await axios.get(
+        convertToSecureUrl(`${process.env.REACT_APP_API_URL}/user/get_share`),
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.data;
+      const result: any = await decryptWithAes(data);
+
+      if (data && result) {
+        // Save to cookie with a 2-hour expiry
+        Cookies.set(cookieKey, JSON.stringify(result), { expires: 1 / 12 }); // 1/12 day = 2 hours
+        sendEventToNative(result?.data.content);
+        copyToClipboard(result?.data.content);
+      }
+    } catch (error) {
+      console.error("Error fetching share content:", error);
+    } finally {
     }
   };
 
   const copyToClipboard = async (text: string) => {
     try {
-      // Attempt to use the Clipboard API (works in most modern browsers)
-      if ("clipboard" in navigator) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const input = document.createElement("input");
-        input.setAttribute("value", text); // Set the value to the text we want to copy
-        input.setAttribute("readonly", ""); // Make it readonly so user can't modify it
-        input.style.position = "absolute"; // Ensure it doesn't affect layout
-        input.style.opacity = "0"; // Make it invisible
-        input.style.pointerEvents = "none"; // Disable interaction
-        input.style.zIndex = "-9999"; // Position it off-screen
-
-        document.body.appendChild(input); // Append it to the body
-        input.select(); // Select the text
-        document.execCommand("copy"); // Copy the selected text to clipboard
-        document.body.removeChild(input); // Remove the input from the DOM
-      }
+      copy(text);
     } catch (error) {
       console.error("Clipboard copy failed", error);
     } finally {
@@ -313,7 +354,7 @@ const PostList = ({
           closeLightbox={closeLightbox}
           showCreatedTime={showCreatedTime}
           likeStatus={likeStatus}
-          sendEventToNative={sendEventToNative}
+          sendEventToNative={handleShare}
           handleLikeChange={handleLikeChange}
           setActivePlayer={setActivePlayer}
           activePlayer={activePlayer}
@@ -501,8 +542,16 @@ const PostList = ({
                 )}
               </div>
             )}
+            {post.file_type === "gif" && (
+              <ImageWithPlaceholder1
+                src={post.files[0]?.resourceURL}
+                alt={`Picture of social_image`}
+                className="w-full h-full object-cover"
+              />
+            )}
             {post.file_type === "video" && (
               <Player
+                videoData={videoData}
                 isCenterPlay={true}
                 src={post?.files[0]?.resourceURL}
                 thumbnail={post?.files[0].thumbnail}
@@ -519,7 +568,7 @@ const PostList = ({
               />
             )}
             {post?.type === "post" || !post?.type ? (
-              <div className="flex justify-between items-center px-4 py-3 text-xs">
+              <div className="flex justify-between items-center px-4 py-3 text-[12px]">
                 {showCreatedTime ? (
                   <div className="fixed top-0 left-0 flex h-screen items-center justify-center z-[1000] w-full">
                     <p className="text-[12px] text-white font-semibold bg-gradient-to-r from-background to-gray-800 px-3 py-1 rounded-md">
@@ -531,7 +580,7 @@ const PostList = ({
                 )}
 
                 <div>
-                  <p className="text-gray-400 text-xs">{post?.create_time}</p>
+                  <p className="text-gray-400 text-[12px]">{post?.create_time}</p>
                 </div>
 
                 <div className="flex gap-x-5  items-center justify-center">
@@ -594,7 +643,7 @@ const PostList = ({
 
                   <button
                     className="flex items-center gap-x-2"
-                    onClick={sendEventToNative}
+                    onClick={handleShare}
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -613,7 +662,7 @@ const PostList = ({
               </div>
             ) : (
               post?.type === "ads" && (
-                <div className="flex justify-between items-center px-4 py-3 text-xs">
+                <div className="flex justify-between items-center px-4 py-3 text-[12px]">
                   <div className="flex items-center gap-2">
                     <div>
                       <img

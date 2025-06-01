@@ -120,7 +120,7 @@ const ForgotPass: React.FC<ForgotPassProps> = ({ setForgot }) => {
                   htmlFor="email"
                   className={`absolute  text-[14px] left-4 transition-all text-[#5B5B5B] pointer-events-none ${
                     isFocusedEmail || email
-                      ? "top-0 text-xs text-blue-500 -translate-y-full"
+                      ? "top-0 text-[12px] text-blue-500 -translate-y-full"
                       : "top-1/2 transform -translate-y-1/2"
                   }`}
                 >
@@ -139,12 +139,14 @@ const ForgotPass: React.FC<ForgotPassProps> = ({ setForgot }) => {
                   className="w-full px- py-2 bg-transparent input_border focus:outline-none text-white placeholder-[#5B5B5B]"
                   required
                   placeholder="输入新密码"
+                  minLength={6}
+                  maxLength={25}
                 />
                 {/* <label
                   htmlFor="password"
                   className={`absolute text-[14px] left-4 transition-all text-[#5B5B5B] pointer-events-none ${
                     isFocusedPassword || password
-                      ? "top-0 text-xs text-blue-500 -translate-y-full"
+                      ? "top-0 text-[12px] text-blue-500 -translate-y-full"
                       : "top-1/2 -translate-y-1/2"
                   }`}
                 >
@@ -175,12 +177,14 @@ const ForgotPass: React.FC<ForgotPassProps> = ({ setForgot }) => {
                   className="w-full px- py-2 bg-transparent input_border focus:outline-none text-white placeholder-[#5B5B5B]"
                   required
                   placeholder="再次输入新密码"
+                  minLength={6}
+                  maxLength={25}
                 />
                 {/* <label
                   htmlFor="confirm-password"
                   className={`absolute text-[14px] left-4 transition-all text-[#5B5B5B] pointer-events-none ${
                     isFocusedConfirmPassword || confirmPassword
-                      ? "top-0 text-xs text-blue-500 -translate-y-full"
+                      ? "top-0 text-[12px] text-blue-500 -translate-y-full"
                       : "top-1/2 -translate-y-1/2"
                   }`}
                 >
